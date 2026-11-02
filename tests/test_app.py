@@ -353,3 +353,15 @@ def test_workspace_logo_and_the_way_back_to_the_board():
     assert r.headers["Location"].endswith(f"/b/{bid}?by=person")
     r = post(ada, "/me", theme="light", next="//evil.example.com/")
     assert r.headers["Location"].endswith("/me")
+
+
+def test_users_page_lists_only_people_in_a_workspace():
+    hal, _ = user("hal@example.com", "Hal", admin=True)
+    _, ivy = user("ivy@example.com", "Ivy Gone")
+    wid, _ = workspace_with_board(hal)
+    with lanes.connect() as con:
+        con.execute("INSERT INTO members (workspace_id, user_id) VALUES (?, ?)", (wid, ivy))
+    assert b"Ivy Gone" in hal.get("/admin").data
+    with lanes.connect() as con:
+        con.execute("DELETE FROM members WHERE user_id = ?", (ivy,))
+    assert b"Ivy Gone" not in hal.get("/admin").data

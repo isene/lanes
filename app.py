@@ -35,7 +35,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -1541,7 +1541,11 @@ def profile():
 @app.route("/admin")
 def admin():
     admin_only()
-    users = db().execute("SELECT * FROM users ORDER BY name").fetchall()
+    # Someone taken off every workspace has left; the account stays for their old comments.
+    users = db().execute(
+        "SELECT * FROM users u WHERE u.is_admin"
+        " OR EXISTS (SELECT 1 FROM members m WHERE m.user_id = u.id) ORDER BY name"
+    ).fetchall()
     return render_template("admin.html", users=users)
 
 

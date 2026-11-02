@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 (2026-11-02)
+
+- The Users page lists only people who are in a workspace (and admins). Someone who has
+  left keeps their name on old comments but no longer shows in the list.
+
 ## 0.3.0 (2026-11-02)
 
 - A sun or moon at the top switches between light and dark colours, and stays on the page.
