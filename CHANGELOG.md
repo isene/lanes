@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 (2026-11-02)
+
+- A sun or moon at the top switches between light and dark colours, and stays on the page.
+- Each workspace can have a logo. It shows at the top left of every page, and a click on it
+  goes back to the last board you opened.
+- The board's menu links to the workspace page, for members, boards and import.
+
 ## 0.2.0 (2026-11-02)
 
 - A profile page, reached from your name at the top: name, picture, password, and colours.

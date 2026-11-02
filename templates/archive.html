@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block head %}<link rel="stylesheet" href="{{ url_for('board_colors', bid=b.id, v=b.version) }}">{% endblock %}
-{% block crumbs %}<span class="sep">/</span><a href="{{ url_for('workspace', wid=w.id) }}">{{ w.name }}</a><span class="sep">/</span><a href="{{ url_for('board', bid=b.id) }}">{{ b.name }}</a>{% endblock %}
+{% block crumbs %}<span class="sep">/</span><a href="{{ url_for('archive', bid=b.id) }}">Archive</a>{% endblock %}
 {% block body %}
 <h1>Archive</h1>
 <p class="small">Cards that have been done for more than {{ b.archive_days }} days.</p>

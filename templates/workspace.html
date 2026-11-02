@@ -1,7 +1,16 @@
 {% extends "base.html" %}
-{% block crumbs %}<span class="sep">/</span><a href="{{ url_for('workspace', wid=w.id) }}">{{ w.name }}</a>{% endblock %}
 {% block body %}
 <h1>{{ w.name }}</h1>
+<form method="post" action="{{ url_for('workspace_logo', wid=w.id) }}" enctype="multipart/form-data" class="picrow">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {{ ws_logo(w) }}
+  <div>
+    <label>{{ 'A new logo' if w.logo else 'A logo for the workspace, shown at the top left' }}
+      <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/gif" data-shrink="contain"></label>
+    <button class="nojs">Upload</button>
+    {% if w.logo %}<button name="remove_logo" value="1" class="link danger">Remove the logo</button>{% endif %}
+  </div>
+</form>
 
 <h2>Boards</h2>
 <div class="tiles">
@@ -53,3 +62,4 @@ to make a board from it. Its people join this workspace.</p>
   <button>Import</button>
 </form>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='forms.js') }}"></script>{% endblock %}

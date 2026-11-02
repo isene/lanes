@@ -333,3 +333,23 @@ def test_profile_sets_name_colours_picture_and_password():
     )
     post(client, "/me", password="correct horse battery", new_password=new, new_password2=new)
     assert check_password_hash(q("SELECT pw_hash FROM users WHERE id = ?", uid)[0][0], new)
+
+
+def test_workspace_logo_and_the_way_back_to_the_board():
+    ada, _ = user("ola@example.com", "Ola", admin=True)
+    eve, _ = user("eva@example.com", "Eva")
+    wid, bid = workspace_with_board(ada)
+    post(ada, f"/w/{wid}/logo", logo=(BytesIO(PNG), "logo.png"))
+    v = q("SELECT logo FROM workspaces WHERE id = ?", wid)[0][0]
+    assert v and ada.get(f"/w/{wid}/logo?v={v}").data == PNG
+    assert eve.get(f"/w/{wid}/logo").status_code == 404  # not a member
+
+    ada.get(f"/b/{bid}")
+    page = ada.get("/me").get_data(as_text=True)  # the top left leads back to the last board
+    assert f'class="wslink" href="/b/{bid}"' in page and f"/w/{wid}/logo?v={v}" in page
+    assert "wslink" not in eve.get("/me").get_data(as_text=True)
+
+    r = post(ada, "/me", theme="dark", next=f"/b/{bid}?by=person")
+    assert r.headers["Location"].endswith(f"/b/{bid}?by=person")
+    r = post(ada, "/me", theme="light", next="//evil.example.com/")
+    assert r.headers["Location"].endswith("/me")

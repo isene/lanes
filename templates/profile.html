@@ -12,7 +12,7 @@
     {{ avatar(me.id, me.name, me.pic, 'big') }}
     <div>
       <label>{{ 'A new picture' if me.pic else 'A picture of you' }}
-        <input type="file" name="picture" accept="image/png,image/jpeg,image/webp,image/gif"></label>
+        <input type="file" name="picture" accept="image/png,image/jpeg,image/webp,image/gif" data-shrink="cover"></label>
       <button class="nojs">Upload</button>
       {% if me.pic %}<button name="remove_picture" value="1" class="link danger">Remove the picture</button>{% endif %}
     </div>
@@ -50,4 +50,4 @@
 </section>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='profile.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='forms.js') }}"></script>{% endblock %}

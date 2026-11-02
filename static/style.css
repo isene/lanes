@@ -6,6 +6,7 @@
   --hit: #2f9e5b; --danger: #c0352b;
   --ring: rgba(11, 127, 134, .25);
   --shadow: 0 1px 2px rgba(20, 26, 35, .06), 0 3px 10px rgba(20, 26, 35, .05);
+  --to-dark: inline-block; --to-light: none;
 }
 /* Dark follows the system, unless the person picked light or dark on the profile page */
 @media (prefers-color-scheme: dark) {
@@ -17,6 +18,7 @@
     --hit: #5ccf8c; --danger: #ff8b80;
     --ring: rgba(95, 208, 207, .3);
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 14px rgba(0, 0, 0, .3);
+    --to-dark: none; --to-light: inline-block;
   }
 }
 :root[data-theme=dark] {
@@ -27,6 +29,7 @@
   --hit: #5ccf8c; --danger: #ff8b80;
   --ring: rgba(95, 208, 207, .3);
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 14px rgba(0, 0, 0, .3);
+  --to-dark: none; --to-light: inline-block;
 }
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; color: var(--fg); background: var(--bg);
@@ -44,6 +47,15 @@ header a, header button.link { color: #d9f1f0; white-space: nowrap; }
 .brand { display: flex; align-items: center; gap: 9px; color: #fff; font-weight: 800; font-size: 20px;
   letter-spacing: -.02em; }
 .brand img { width: 28px; height: 28px; }
+.to-dark { display: var(--to-dark); }
+.to-light { display: var(--to-light); }
+header .mode button { padding: 0 2px; font-size: 18px; line-height: 1; text-decoration: none; }
+.wslink { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.wsname { overflow: hidden; text-overflow: ellipsis; }
+.wslogo { display: inline-grid; place-items: center; flex: none; height: 28px; min-width: 28px;
+  max-width: 120px; border-radius: 7px; color: #fff; font-size: 12px; font-weight: 700; }
+img.wslogo { width: auto; padding: 2px 4px; object-fit: contain; background: #fff; }
+.picrow .wslogo { height: 64px; min-width: 64px; max-width: 240px; border-radius: 12px; font-size: 22px; }
 header a.me { display: inline-flex; align-items: center; gap: 8px; color: #c6dcdf; font-size: 14px;
   text-decoration: none; }
 
@@ -253,7 +265,7 @@ button.x { color: var(--muted); text-decoration: none; font-size: 17px; }
 .cardpanel textarea + button, .cardpanel form > button:not(.link):not(.nojs) { margin-top: 6px; }
 
 @media (max-width: 600px) {
-  .wide { display: none; }
+  .wide, .wsname { display: none; }
   header { padding: 0 12px; }
   h1 { font-size: 24px; }
   .colhead, .cell { min-width: 78vw; }

@@ -2,7 +2,6 @@
 {% block title %}{{ b.name }} · lanes{% endblock %}
 {% block body_class %}boardpage{% endblock %}
 {% block head %}<link rel="stylesheet" href="{{ url_for('board_colors', bid=b.id, v=b.version) }}">{% endblock %}
-{% block crumbs %}<span class="sep">/</span><a href="{{ url_for('workspace', wid=w.id) }}">{{ w.name }}</a>{% endblock %}
 
 {% macro hidden() %}<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ here }}">{% endmacro %}
 
@@ -67,6 +66,7 @@
         {{ hidden() }}<input name="name" class="grow" placeholder="New label" required>
         <input type="color" name="color" value="#5b8def" aria-label="Label colour"><button>Add</button>
       </form>
+      <p><a href="{{ url_for('workspace', wid=w.id) }}">Members, boards and import</a></p>
       <p class="small">Keys: n new card, / search, Esc close.</p>
     </div>
   </details>

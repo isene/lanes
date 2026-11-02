@@ -45,6 +45,7 @@ Enough to move one team off Taiga.
 - Cards: a number (#123), title, text, people, labels, sub-tasks and
   comments.
 - A profile page for name, picture, password, and light or dark colours.
+- A workspace logo at the top left that leads back to the last board you opened.
 - Drag cards between columns and lanes with the mouse. On a phone, the
   card panel moves them.
 - Import a Taiga project export. Taiga's statuses become columns, its

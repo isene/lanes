@@ -12,10 +12,16 @@
 <header>
   <nav class="crumbs">
     <a class="brand" href="{{ url_for('home') }}"><img src="{{ url_for('static', filename='logo.svg') }}" alt=""><span class="wide">lanes</span></a>
+    {% if crumb %}<span class="sep">/</span><a class="wslink" href="{{ crumb.href }}" title="Back to the board">{{ ws_logo(crumb.w) }}<span class="wsname">{{ crumb.w.name }}</span></a>{% endif %}
     {% block crumbs %}{% endblock %}
   </nav>
   {% if me %}
   <nav>
+    <form method="post" action="{{ url_for('profile') }}" class="mode">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+      <button name="theme" value="dark" class="link to-dark" title="Dark colours">☾</button>
+      <button name="theme" value="light" class="link to-light" title="Light colours">☀</button>
+    </form>
     {% if me.is_admin %}<a href="{{ url_for('admin') }}">Users</a>{% endif %}
     <a class="me" href="{{ url_for('profile') }}" title="Your profile">{{ avatar(me.id, me.name, me.pic, 'sm') }}<span class="wide">{{ me.name }}</span></a>
     <form method="post" action="{{ url_for('logout') }}" class="inline">

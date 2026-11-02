@@ -35,7 +35,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -63,7 +63,11 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS pictures (
   user_id INTEGER PRIMARY KEY REFERENCES users(id), type TEXT NOT NULL, data BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS workspaces (
-  id INTEGER PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL);
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL,
+  logo INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS logos (
+  workspace_id INTEGER PRIMARY KEY REFERENCES workspaces(id), type TEXT NOT NULL,
+  data BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS members (
   workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
   user_id INTEGER NOT NULL REFERENCES users(id), PRIMARY KEY (workspace_id, user_id));
@@ -152,14 +156,14 @@ def init_db() -> None:
     with closing(connect()) as con:
         con.execute("PRAGMA journal_mode = WAL")
         con.executescript(SCHEMA)
-        # Columns added after 0.1.0; a database made before then gets them here.
-        have = {r[1] for r in con.execute("PRAGMA table_info(users)")}
-        for col, kind in (
-            ("pic", "INTEGER NOT NULL DEFAULT 0"),
-            ("theme", "TEXT NOT NULL DEFAULT ''"),
+        # Columns added after 0.1.0; an older database gets them here.
+        for table, col, kind in (
+            ("users", "pic", "INTEGER NOT NULL DEFAULT 0"),
+            ("users", "theme", "TEXT NOT NULL DEFAULT ''"),
+            ("workspaces", "logo", "INTEGER NOT NULL DEFAULT 0"),
         ):
-            if col not in have:
-                con.execute(f"ALTER TABLE users ADD COLUMN {col} {kind}")
+            if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
 
 
 def bump(con: sqlite3.Connection, bid: int) -> None:
@@ -263,7 +267,29 @@ def security_headers(resp):
 def template_values():
     if "csrf" not in session:
         session["csrf"] = secrets.token_urlsafe(32)
-    return {"csrf": session["csrf"], "me": current_user(), "now": now()}
+    me = current_user()
+    return {"csrf": session["csrf"], "me": me, "now": now(), "crumb": me and crumb(me)}
+
+
+def crumb(me: sqlite3.Row) -> dict | None:
+    """The workspace at the top left of every page, and its link: back to the last board opened."""
+    con, last = db(), session.get("board", 0)
+    w = (
+        g.get("ws")
+        or con.execute(
+            "SELECT w.* FROM boards b JOIN workspaces w ON w.id = b.workspace_id"
+            " JOIN members m ON m.workspace_id = w.id WHERE b.id = ? AND m.user_id = ?",
+            (last, me["id"]),
+        ).fetchone()
+    )
+    if not w:
+        return None
+    b = con.execute(
+        "SELECT id FROM boards WHERE workspace_id = ? ORDER BY id = ? DESC, id LIMIT 1",
+        (w["id"], last),
+    ).fetchone()
+    href = url_for("board", bid=b["id"]) if b else url_for("workspace", wid=w["id"])
+    return {"w": w, "href": href}
 
 
 @app.template_filter("when")
@@ -291,6 +317,15 @@ def avatar(uid: int, name: str, pic: int = 0, size: str = "") -> Markup:
     return Markup('<span class="avatar {} a{}" title="{}">{}</span>').format(
         size, uid % 8, name, initials(name)
     )
+
+
+@app.template_global()
+def ws_logo(w: sqlite3.Row) -> Markup:
+    """A workspace's logo, or its initials on a colour of its own."""
+    if w["logo"]:
+        src = url_for("workspace_logo", wid=w["id"], v=w["logo"])
+        return Markup('<img class="wslogo" src="{}" alt="">').format(src)
+    return Markup('<span class="wslogo a{}">{}</span>').format(w["id"] % 8, initials(w["name"]))
 
 
 @app.template_filter("md")
@@ -481,7 +516,7 @@ def new_workspace():
 
 @app.route("/w/<int:wid>")
 def workspace(wid):
-    w = get_workspace(wid)
+    w = g.ws = get_workspace(wid)
     con = db()
     boards = con.execute(
         "SELECT * FROM boards WHERE workspace_id = ? ORDER BY name", (wid,)
@@ -673,6 +708,7 @@ def matches(c: dict, q: str) -> bool:
 @app.route("/b/<int:bid>")
 def board(bid):
     b = get_board(bid)
+    session["board"] = bid
     cols, lanes, labels = board_parts(bid)
     people = workspace_people(b["workspace_id"])
     where, args = archived(b)
@@ -723,7 +759,9 @@ def board(bid):
         )
         .fetchone()[0]
     )
-    w = db().execute("SELECT * FROM workspaces WHERE id = ?", (b["workspace_id"],)).fetchone()
+    w = g.ws = (
+        db().execute("SELECT * FROM workspaces WHERE id = ?", (b["workspace_id"],)).fetchone()
+    )
 
     def view(**change) -> str:
         """A link to this view with some settings changed; None removes one."""
@@ -793,7 +831,9 @@ def archive(bid):
     cards = sorted(
         (c for c in cards if not q or matches(c, q)), key=lambda c: c["done_at"], reverse=True
     )
-    w = db().execute("SELECT * FROM workspaces WHERE id = ?", (b["workspace_id"],)).fetchone()
+    w = g.ws = (
+        db().execute("SELECT * FROM workspaces WHERE id = ?", (b["workspace_id"],)).fetchone()
+    )
     return render_template("archive.html", b=b, w=w, cards=cards, q=q)
 
 
@@ -1406,14 +1446,55 @@ def picture_type(data: bytes) -> str | None:
     return next((kind for magic, kind in PICTURE_TYPES if data.startswith(magic)), None)
 
 
-@app.route("/u/<int:uid>/picture")
-def picture(uid):
-    row = db().execute("SELECT type, data FROM pictures WHERE user_id = ?", (uid,)).fetchone()
+def read_picture(file) -> tuple[str, bytes] | None:
+    """An uploaded picture as (type, data), or None after a message saying what is wrong."""
+    data = file.read(PICTURE_MAX + 1)
+    kind = picture_type(data)
+    if len(data) > PICTURE_MAX:
+        flash("That picture is over 1 MB. Pick a smaller one.")
+    elif not kind:
+        flash("Use a PNG, JPEG, GIF or WebP picture.")
+    else:
+        return kind, data
+    return None
+
+
+def serve_picture(row: sqlite3.Row | None) -> Response:
     if not row:
         abort(404)
     resp = Response(row["data"], mimetype=row["type"])
     resp.headers["Cache-Control"] = "private, max-age=31536000, immutable"  # the link has a version
     return resp
+
+
+@app.route("/u/<int:uid>/picture")
+def picture(uid):
+    return serve_picture(
+        db().execute("SELECT type, data FROM pictures WHERE user_id = ?", (uid,)).fetchone()
+    )
+
+
+@app.route("/w/<int:wid>/logo", methods=["GET", "POST"])
+def workspace_logo(wid):
+    get_workspace(wid)  # members only
+    con = db()
+    if request.method == "GET":
+        return serve_picture(
+            con.execute("SELECT type, data FROM logos WHERE workspace_id = ?", (wid,)).fetchone()
+        )
+    if request.form.get("remove_logo"):
+        con.execute("DELETE FROM logos WHERE workspace_id = ?", (wid,))
+        con.execute("UPDATE workspaces SET logo = 0 WHERE id = ?", (wid,))
+    elif request.files.get("logo"):
+        pic = read_picture(request.files["logo"])
+        if pic:
+            con.execute(
+                "INSERT OR REPLACE INTO logos (workspace_id, type, data) VALUES (?, ?, ?)",
+                (wid, *pic),
+            )
+            con.execute("UPDATE workspaces SET logo = ? WHERE id = ?", (now(), wid))
+    con.commit()
+    return redirect(url_for("workspace", wid=wid))
 
 
 @app.route("/me", methods=["GET", "POST"])
@@ -1431,16 +1512,11 @@ def profile():
         con.execute("DELETE FROM pictures WHERE user_id = ?", (me["id"],))
         con.execute("UPDATE users SET pic = 0 WHERE id = ?", (me["id"],))
     elif request.files.get("picture"):
-        data = request.files["picture"].read(PICTURE_MAX + 1)
-        kind = picture_type(data)
-        if len(data) > PICTURE_MAX:
-            flash("That picture is over 1 MB. Pick a smaller one.")
-        elif not kind:
-            flash("Use a PNG, JPEG, GIF or WebP picture.")
-        else:
+        pic = read_picture(request.files["picture"])
+        if pic:
             con.execute(
                 "INSERT OR REPLACE INTO pictures (user_id, type, data) VALUES (?, ?, ?)",
-                (me["id"], kind, data),
+                (me["id"], *pic),
             )
             con.execute("UPDATE users SET pic = ? WHERE id = ?", (now(), me["id"]))
     if "password" in f:
@@ -1458,7 +1534,8 @@ def profile():
             )
             flash("Your password is changed.")
     con.commit()
-    return redirect(url_for("profile"))
+    nxt = f.get("next", "")  # the colour switch at the top goes back to the page it was on
+    return redirect(nxt if re.fullmatch(r"/(?![/\\])[^\\]*", nxt) else url_for("profile"))
 
 
 @app.route("/admin")
