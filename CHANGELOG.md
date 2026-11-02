@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 (2026-11-02)
+
+- Dates show as 2026-11-14 everywhere. The Due box takes 2026-11-14, 14.11.2026 or 14.11
+  (this year), so the browser's language no longer decides the order.
+
 ## 0.5.0 (2026-11-02)
 
 - A card can have a due date. It shows on the card, in red once the date has passed and the

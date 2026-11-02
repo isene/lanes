@@ -1,6 +1,6 @@
 [project]
 name = "lanes"
-version = "0.5.0"
+version = "0.5.1"
 description = "A kanban board for any team: columns, swimlanes, and cards that show only what matters."
 license = { text = "Unlicense" }
 requires-python = ">=3.8"

@@ -394,17 +394,22 @@ def test_a_card_past_its_date_shows_red_and_is_listed_by_person():
     post(uma, f"/card/{late}/edit", due="2020-01-05")
     post(uma, f"/card/{soon}/edit", due="2999-12-31")
     page = uma.get(f"/b/{bid}").data.decode()
-    assert 'class="due late"' in page and "5 Jan" in page and "31 Dec" in page
+    assert 'class="due late"' in page and "2020-01-05" in page and "2999-12-31" in page
     assert '<span class="dot">1</span>' in page
     with lanes.connect() as con:
         message = lanes.overdue(con, wid)
     assert message.splitlines()[1:] == [
         "@Uma Ink",
-        f"- #1 Renew domain (due 5 Jan) {lanes.BASE_URL}/b/{bid}?card={late}",
+        f"- #1 Renew domain (due 2020-01-05) {lanes.BASE_URL}/b/{bid}?card={late}",
     ]
     post(uma, f"/card/{late}/move", column=done)  # done is never late
     with lanes.connect() as con:
         assert lanes.overdue(con, wid) == ""
     assert 'class="dot"' not in uma.get(f"/b/{bid}").data.decode()
+    post(uma, f"/card/{soon}/edit", due="14.11.2030")  # Norwegian order
+    assert q("SELECT due FROM cards WHERE id = ?", soon)[0][0] == "2030-11-14"
+    post(uma, f"/card/{soon}/edit", due="31.02.2030")  # no such day: the date stays
+    assert q("SELECT due FROM cards WHERE id = ?", soon)[0][0] == "2030-11-14"
     post(uma, f"/card/{soon}/edit", due="")
     assert q("SELECT due FROM cards WHERE id = ?", soon)[0][0] is None
+    assert lanes.parse_day("3.12") == lanes.today()[:4] + "-12-03"

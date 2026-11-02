@@ -35,7 +35,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -53,7 +53,6 @@ DEV = os.environ.get("LANES_DEV") == "1"
 BASE_URL = os.environ.get("LANES_URL", "http://127.0.0.1:8092").rstrip("/")
 INVITE_DAYS = 7
 COLOR = re.compile(r"#[0-9a-fA-F]{6}")
-DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -131,6 +130,19 @@ def now() -> int:
 
 def today() -> str:
     return time.strftime("%Y-%m-%d")
+
+
+def parse_day(text: str) -> str | None:
+    """Read 2026-11-14, 14.11.2026 or 14.11 (this year) as 2026-11-14. Anything else is None."""
+    text = text.strip()
+    if re.fullmatch(r"\d{1,2}\.\d{1,2}\.?", text):
+        text = text.rstrip(".") + "." + today()[:4]
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(text, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    return None
 
 
 # Database
@@ -306,12 +318,6 @@ def when(ts: int | None) -> str:
 @app.template_filter("day")
 def day(ts: int | None) -> str:
     return time.strftime("%Y-%m-%d", time.localtime(ts)) if ts else ""
-
-
-@app.template_filter("short")
-def short(date: str) -> str:
-    """2026-11-05 becomes 5 Nov."""
-    return datetime.strptime(date, "%Y-%m-%d").strftime("%-d %b")
 
 
 @app.template_filter("initials")
@@ -1188,11 +1194,12 @@ def edit_card(cid):
         con.execute("UPDATE cards SET title = ? WHERE id = ?", (f["title"].strip(), cid))
     if "body" in f:
         con.execute("UPDATE cards SET body = ? WHERE id = ?", (f["body"].strip(), cid))
-    if "due" in f:  # an empty date clears it
-        due = f["due"].strip()
-        con.execute(
-            "UPDATE cards SET due = ? WHERE id = ?", (due if DATE.fullmatch(due) else None, cid)
-        )
+    if "due" in f:  # an empty box clears the date
+        due = parse_day(f["due"])
+        if due or not f["due"].strip():
+            con.execute("UPDATE cards SET due = ? WHERE id = ?", (due, cid))
+        else:
+            flash("Write the date as 2026-11-14 or 14.11.2026.")
     col = con.execute(
         "SELECT * FROM columns WHERE id = ? AND board_id = ?", (int_or_none(f.get("column")), bid)
     ).fetchone()
@@ -1619,7 +1626,7 @@ def overdue(con: sqlite3.Connection, wid: int) -> str:
             who = r["name"]
             lines.append(f"@{who}" if who else "Nobody")
         link = f"{BASE_URL}/b/{r['board_id']}?card={r['id']}"
-        lines.append(f"- #{r['ref']} {r['title']} (due {short(r['due'])}) {link}")
+        lines.append(f"- #{r['ref']} {r['title']} (due {r['due']}) {link}")
     return "Cards past their date:\n" + "\n".join(lines) if lines else ""
 
 
