@@ -365,3 +365,17 @@ def test_users_page_lists_only_people_in_a_workspace():
     with lanes.connect() as con:
         con.execute("DELETE FROM members WHERE user_id = ?", (ivy,))
     assert b"Ivy Gone" not in hal.get("/admin").data
+
+
+def test_an_admin_takes_someone_off_a_workspace():
+    jo, jo_id = user("jo@example.com", "Jo", admin=True)
+    kim, kim_id = user("kim@example.com", "Kim")
+    wid, _ = workspace_with_board(jo)
+    post(jo, f"/w/{wid}/invite", name="Kim", email="kim@example.com")
+    assert b"Remove</button>" in jo.get(f"/w/{wid}").data
+    assert b"Remove</button>" not in kim.get(f"/w/{wid}").data
+    assert post(kim, f"/w/{wid}/remove/{jo_id}").status_code == 403  # only an admin removes
+    assert post(jo, f"/w/{wid}/remove/{jo_id}").status_code == 400  # never yourself
+    post(jo, f"/w/{wid}/remove/{kim_id}")
+    assert not q("SELECT 1 FROM members WHERE user_id = ?", kim_id)
+    assert kim.get(f"/w/{wid}").status_code == 404

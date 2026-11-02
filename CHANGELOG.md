@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 (2026-11-02)
+
+- An admin can remove a member from the workspace page. Their cards and comments keep their
+  name.
+
 ## 0.3.1 (2026-11-02)
 
 - The Users page lists only people who are in a workspace (and admins). Someone who has

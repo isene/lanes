@@ -25,7 +25,7 @@
 <h2>Members</h2>
 <div class="scroll panel">
 <table>
-<thead><tr><th>Name</th><th class="wide">Email</th><th>Login</th></tr></thead>
+<thead><tr><th>Name</th><th class="wide">Email</th><th>Login</th><th></th></tr></thead>
 <tbody>
 {% for u in people %}
 <tr>
@@ -40,6 +40,11 @@
       </form>
     {% endif %}
   </td>
+  <td>{% if me.is_admin and u.id != me.id %}
+    <form method="post" action="{{ url_for('workspace_remove', wid=w.id, uid=u.id) }}" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="link danger">Remove</button>
+    </form>{% endif %}</td>
 </tr>
 {% endfor %}
 </tbody>
@@ -51,7 +56,8 @@
   <input name="email" type="email" placeholder="Email" required>
   <button>Add a member</button>
 </form>
-<p class="small">A new member gets an invite link. Send it yourself; it works once, for 7 days.</p>
+<p class="small">A new member gets an invite link. Send it yourself; it works once, for 7 days.
+An admin can remove a member; their cards and comments keep their name.</p>
 
 <h2>Import from Taiga</h2>
 <p class="small">In Taiga, open the project, then Admin, Project and Export. Upload the file here

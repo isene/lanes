@@ -35,7 +35,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -546,6 +546,23 @@ def workspace_invite(wid):
         flash(f"{user['name']} already has a login and is now a member.")
     else:
         flash(f"Invite link for {user['name']}: {make_invite(con, uid)}")
+    return redirect(url_for("workspace", wid=wid))
+
+
+@app.route("/w/<int:wid>/remove/<int:uid>", methods=["POST"])
+def workspace_remove(wid, uid):
+    """An admin takes someone off the workspace. Their cards and comments keep their name."""
+    get_workspace(wid)
+    admin_only()
+    if uid == current_user()["id"]:
+        abort(400)
+    con = db()
+    user = con.execute("SELECT name FROM users WHERE id = ?", (uid,)).fetchone()
+    con.execute("DELETE FROM members WHERE workspace_id = ? AND user_id = ?", (wid, uid))
+    con.execute("UPDATE boards SET version = version + 1 WHERE workspace_id = ?", (wid,))
+    con.commit()
+    if user:
+        flash(f"{user['name']} is no longer a member.")
     return redirect(url_for("workspace", wid=wid))
 
 
