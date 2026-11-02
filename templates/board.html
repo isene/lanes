@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}{{ b.name }} · lanes{% endblock %}
+{% block body_class %}boardpage{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('board_colors', bid=b.id, v=b.version) }}">{% endblock %}
+{% block crumbs %}<span class="sep">/</span><a href="{{ url_for('workspace', wid=w.id) }}">{{ w.name }}</a>{% endblock %}
+
+{% macro hidden() %}<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ here }}">{% endmacro %}
+
+{% macro tile(c) %}
+<a class="tile" id="c{{ c.id }}" data-card="{{ c.id }}" href="{{ view(card=c.id) }}">
+  <span class="title"><span class="ref">#{{ c.ref }}</span> {{ c.title }}</span>
+  {% if c.labels %}<span class="labels">{% for l in c.labels %}<span class="label lab-{{ l.id }}">{{ l.name }}</span>{% endfor %}</span>{% endif %}
+  {% if c.open_subs %}<span class="subs">
+    {% for s in c.open_subs[:5] %}
+    <span>{% if s.ref %}<span class="ref">#{{ s.ref }}</span> {% endif %}{{ s.title }}</span>
+    {% endfor %}
+    {% if c.open_subs|length > 5 %}<span class="small">and {{ c.open_subs|length - 5 }} more</span>{% endif %}
+  </span>{% endif %}
+  {% if c.people or c.n_sub or c.n_comments %}
+  <span class="facts">
+    {% if c.n_sub %}<span class="progress" title="{{ c.n_sub_done }} of {{ c.n_sub }} sub-tasks done"><progress value="{{ c.n_sub_done }}" max="{{ c.n_sub }}"></progress>{{ c.n_sub_done }}/{{ c.n_sub }}</span>{% endif %}
+    {% if c.n_comments %}<span title="Comments">💬 {{ c.n_comments }}</span>{% endif %}
+    <span class="people">{% for p in c.people %}<span class="avatar xs a{{ p.id % 8 }}" title="{{ p.name }}">{{ p.name|initials }}</span>{% endfor %}</span>
+  </span>
+  {% endif %}
+</a>
+{% endmacro %}
+
+{% block body %}
+<div class="bar">
+  <h1>{{ b.name }}</h1>
+  <nav class="views" aria-label="Rows">
+    <a class="{{ 'on' if by == '' }}" href="{{ view(by=None) }}">Lanes</a>
+    <a class="{{ 'on' if by == 'person' }}" href="{{ view(by='person') }}">People</a>
+    <a class="{{ 'on' if by == 'label' }}" href="{{ view(by='label') }}">Labels</a>
+  </nav>
+  <div class="chips">
+    {% for p in people %}<a class="chip{{ ' on' if p.id in who }}" title="Only cards for {{ p.name }}"
+      href="{{ view(who=(who|reject('equalto', p.id)|list) if p.id in who else who + [p.id]) }}"><span class="avatar xs a{{ p.id % 8 }}">{{ p.name|initials }}</span></a>{% endfor %}
+    {% for l in labels %}<a class="label lab-{{ l.id }}{{ ' on' if l.id in lab }}"
+      href="{{ view(label=(lab|reject('equalto', l.id)|list) if l.id in lab else lab + [l.id]) }}">{{ l.name }}</a>{% endfor %}
+  </div>
+  <form method="get" class="search">
+    {% if by %}<input type="hidden" name="by" value="{{ by }}">{% endif %}
+    {% for i in who %}<input type="hidden" name="who" value="{{ i }}">{% endfor %}
+    {% for i in lab %}<input type="hidden" name="label" value="{{ i }}">{% endfor %}
+    <input name="q" value="{{ q }}" placeholder="Search   /" aria-label="Search">
+  </form>
+  {% if who or lab or q %}<a class="small" href="{{ view(who=None, label=None, q=None) }}">Show all ({{ n_shown }} of {{ n_cards }} shown)</a>{% endif %}
+  <a class="small" href="{{ url_for('archive', bid=b.id) }}">Archive ({{ n_archived }})</a>
+  <details class="menu right">
+    <summary>Board</summary>
+    <div class="drop">
+      <form method="post" action="{{ url_for('edit_board', bid=b.id) }}">
+        {{ hidden() }}
+        <label>Name <input name="name" value="{{ b.name }}" required></label>
+        <label>Days a done card stays on the board <input name="archive_days" inputmode="numeric" value="{{ b.archive_days }}"></label>
+        <button>Save</button>
+      </form>
+      <h4>Labels</h4>
+      {% for l in labels %}
+      <form method="post" action="{{ url_for('delete_label', pid=l.id) }}" class="row tight">
+        {{ hidden() }}<span class="label lab-{{ l.id }}">{{ l.name }}</span><button class="link danger">Delete</button>
+      </form>
+      {% endfor %}
+      <form method="post" action="{{ url_for('new_label', bid=b.id) }}" class="row tight">
+        {{ hidden() }}<input name="name" class="grow" placeholder="New label" required>
+        <input type="color" name="color" value="#5b8def" aria-label="Label colour"><button>Add</button>
+      </form>
+      <p class="small">Keys: n new card, / search, Esc close.</p>
+    </div>
+  </details>
+</div>
+
+<div class="board" id="board" data-board="{{ b.id }}" data-version="{{ b.version }}" data-by="{{ by }}">
+  <div class="row head">
+    {% for col in cols %}{% set n = per_column.get(col.id, 0) %}
+    <div class="colhead col-{{ col.id }}" data-col="{{ col.id }}">
+      <button type="button" class="fold" data-fold="c{{ col.id }}" title="Fold or open the column">‹</button>
+      <span class="vname">{{ col.name }}</span>
+      <form method="post" action="{{ url_for('edit_column', pid=col.id) }}" class="rename">
+        {{ hidden() }}<input name="name" value="{{ col.name }}" aria-label="Column name" required>
+      </form>
+      <span class="count{{ ' over' if col.wip and n > col.wip }}" title="{{ n }} cards{% if col.wip %}, at most {{ col.wip }} wanted{% endif %}">{{ n }}{% if col.wip %}/{{ col.wip }}{% endif %}</span>
+      <details class="menu">
+        <summary title="Column settings">⋯</summary>
+        <div class="drop">
+          <form method="post" action="{{ url_for('edit_column', pid=col.id) }}">
+            {{ hidden() }}<input type="hidden" name="settings" value="1">
+            <label>Colour <input type="color" name="color" value="{{ col.color }}"></label>
+            <label>Most cards at once <input name="wip" inputmode="numeric" value="{{ col.wip or '' }}" placeholder="No limit"></label>
+            <label class="check"><input type="checkbox" name="done" value="1"{{ ' checked' if col.done }}> Done column: its old cards go to the archive</label>
+            <button>Save</button>
+          </form>
+          <div class="row tight">
+            {% if not loop.first %}<form method="post" action="{{ url_for('move_column', pid=col.id) }}">{{ hidden() }}
+              <input type="hidden" name="before" value="{{ cols[loop.index0 - 1].id }}"><button class="link">‹ Move left</button></form>{% endif %}
+            {% if not loop.last %}<form method="post" action="{{ url_for('move_column', pid=col.id) }}">{{ hidden() }}
+              <input type="hidden" name="before" value="{{ cols[loop.index0 + 2].id if loop.index0 + 2 < cols|length else '' }}"><button class="link">Move right ›</button></form>{% endif %}
+          </div>
+          <form method="post" action="{{ url_for('delete_column', pid=col.id) }}">{{ hidden() }}<button class="link danger">Delete the column</button></form>
+        </div>
+      </details>
+    </div>
+    {% endfor %}
+    <form method="post" action="{{ url_for('new_column', bid=b.id) }}" class="addcol">
+      {{ hidden() }}<input name="name" placeholder="+ Column" aria-label="New column" required>
+    </form>
+  </div>
+
+  {% for key, name in rows %}
+  {% if key or by %}
+  <div class="lanehead" data-lane="{{ key }}">
+    <button type="button" class="fold" data-fold="l{{ by }}{{ key }}" title="Fold or open the lane">▾</button>
+    {% if by %}<span class="lanename">{{ name }}</span>
+    {% else %}
+    <form method="post" action="{{ url_for('edit_lane', pid=key) }}" class="rename">
+      {{ hidden() }}<input name="name" value="{{ name }}" aria-label="Lane name" required>
+    </form>
+    {% endif %}
+    <span class="small">{{ in_row[key] }}</span>
+    {% if not by %}
+    <details class="menu">
+      <summary title="Lane settings">⋯</summary>
+      <div class="drop">
+        {% if not loop.first %}<form method="post" action="{{ url_for('move_lane', pid=key) }}">{{ hidden() }}
+          <input type="hidden" name="before" value="{{ rows[loop.index0 - 1][0] }}"><button class="link">Move up</button></form>{% endif %}
+        {% if not loop.last %}<form method="post" action="{{ url_for('move_lane', pid=key) }}">{{ hidden() }}
+          <input type="hidden" name="before" value="{{ rows[loop.index0 + 2][0] if loop.index0 + 2 < rows|length else '' }}"><button class="link">Move down</button></form>{% endif %}
+        <form method="post" action="{{ url_for('delete_lane', pid=key) }}">{{ hidden() }}<button class="link danger">Delete the lane</button></form>
+      </div>
+    </details>
+    {% endif %}
+  </div>
+  {% endif %}
+  <div class="row cells" data-row="{{ key }}" data-fold-row="l{{ by }}{{ key }}">
+    {% for col in cols %}
+    <div class="cell col-{{ col.id }}" data-col="{{ col.id }}">
+      {% for c in cells.get((key, col.id), []) %}{{ tile(c) }}{% endfor %}
+      <form method="post" action="{{ url_for('new_card', bid=b.id) }}" class="addcard">
+        {{ hidden() }}<input type="hidden" name="column" value="{{ col.id }}">
+        <input type="hidden" name="lane" value="{{ key if not by else (lanes[0].id if lanes else '') }}">
+        <input type="hidden" name="by" value="{{ by }}"><input type="hidden" name="row" value="{{ key }}">
+        <input name="title" placeholder="+ Card" aria-label="New card in {{ col.name }}" required>
+      </form>
+    </div>
+    {% endfor %}
+    <div class="spacer"></div>
+  </div>
+  {% endfor %}
+
+  {% if not by %}
+  <form method="post" action="{{ url_for('new_lane', bid=b.id) }}" class="addlane">
+    {{ hidden() }}<input name="name" placeholder="+ Lane" aria-label="New lane" required>
+  </form>
+  {% endif %}
+</div>
+
+{% if open_card %}{% set oc = open_card %}{% set c = oc.c %}
+<aside class="cardpanel" id="cardpanel">
+  <a class="close" href="{{ view() }}" title="Close (Esc)">×</a>
+  <form method="post" action="{{ url_for('edit_card', cid=c.id) }}" class="titleform">
+    {{ hidden() }}<span class="ref">#{{ c.ref }}</span><input name="title" value="{{ c.title }}" aria-label="Title" required>
+  </form>
+  <form method="post" action="{{ url_for('edit_card', cid=c.id) }}" class="row" data-autosubmit>
+    {{ hidden() }}
+    <label>Column <select name="column">{% for col in cols %}<option value="{{ col.id }}"{{ ' selected' if col.id == c.column_id }}>{{ col.name }}</option>{% endfor %}</select></label>
+    {% if lanes %}<label>Lane <select name="lane">{% for ln in lanes %}<option value="{{ ln.id }}"{{ ' selected' if ln.id == c.lane_id }}>{{ ln.name }}</option>{% endfor %}</select></label>{% endif %}
+    <button class="nojs">Move</button>
+  </form>
+
+  {% if c.body %}<div class="text">{{ c.body|md }}</div>{% endif %}
+  <details class="edit">
+    <summary>{{ 'Edit the text' if c.body else 'Add text' }}</summary>
+    <form method="post" action="{{ url_for('edit_card', cid=c.id) }}">
+      {{ hidden() }}<textarea name="body" rows="8">{{ c.body }}</textarea><button>Save</button>
+    </form>
+  </details>
+
+  <h3>People</h3>
+  <form method="post" action="{{ url_for('edit_card', cid=c.id) }}" class="picks" data-autosubmit>
+    {{ hidden() }}<input type="hidden" name="people" value="1">
+    {% for p in people %}<label class="pick"><input type="checkbox" name="person" value="{{ p.id }}"{{ ' checked' if p.id in oc.people }}>
+      <span class="avatar xs a{{ p.id % 8 }}">{{ p.name|initials }}</span>{{ p.name }}</label>{% endfor %}
+    <button class="nojs">Save</button>
+  </form>
+
+  <h3>Labels</h3>
+  {% if labels %}
+  <form method="post" action="{{ url_for('edit_card', cid=c.id) }}" class="picks" data-autosubmit>
+    {{ hidden() }}<input type="hidden" name="labels" value="1">
+    {% for l in labels %}<label class="pick"><input type="checkbox" name="label" value="{{ l.id }}"{{ ' checked' if l.id in oc.labels }}>
+      <span class="label lab-{{ l.id }}">{{ l.name }}</span></label>{% endfor %}
+    <button class="nojs">Save</button>
+  </form>
+  {% endif %}
+  <form method="post" action="{{ url_for('new_label', bid=b.id) }}" class="row tight">
+    {{ hidden() }}<input type="hidden" name="card" value="{{ c.id }}">
+    <input name="name" class="grow" placeholder="New label" required>
+    <input type="color" name="color" value="#5b8def" aria-label="Label colour"><button>Add</button>
+  </form>
+
+  {% set open_subs = oc.subtasks|rejectattr('done')|list %}{% set done_subs = oc.subtasks|selectattr('done')|list %}
+  <h3>Sub-tasks{% if oc.subtasks %} <span class="small">{{ done_subs|length }} of {{ oc.subtasks|length }} done</span>{% endif %}</h3>
+  {% macro sub(s) %}
+  <li>
+    <form method="post" action="{{ url_for('edit_subtask', sid=s.id) }}" data-autosubmit>
+      {{ hidden() }}<label class="check"><input type="checkbox" name="done" value="1"{{ ' checked' if s.done }}>
+      <span>{% if s.ref %}<span class="ref">#{{ s.ref }}</span> {% endif %}{{ s.title }}</span></label>
+      <button class="nojs">Save</button>
+    </form>
+    <form method="post" action="{{ url_for('delete_subtask', sid=s.id) }}">{{ hidden() }}<button class="link x" title="Delete the sub-task">×</button></form>
+  </li>
+  {% endmacro %}
+  <ul class="sublist">{% for s in open_subs %}{{ sub(s) }}{% endfor %}</ul>
+  {% if done_subs %}<details class="done"><summary>Show {{ done_subs|length }} done</summary>
+    <ul class="sublist">{% for s in done_subs %}{{ sub(s) }}{% endfor %}</ul></details>{% endif %}
+  <form method="post" action="{{ url_for('new_subtask', cid=c.id) }}" class="row tight">
+    {{ hidden() }}<input name="title" class="grow" placeholder="New sub-task" required><button>Add</button>
+  </form>
+
+  <h3>Comments</h3>
+  {% for m in oc.comments %}
+  <div class="comment">
+    <span class="avatar a{{ m.user_id % 8 }}">{{ m.name|initials }}</span>
+    <div class="bubble"><div class="small"><b>{{ m.name }}</b> · {{ m.created_at|when }}</div>{{ m.body|md }}</div>
+  </div>
+  {% endfor %}
+  <form method="post" action="{{ url_for('comment', cid=c.id) }}">
+    {{ hidden() }}<textarea name="body" rows="3" placeholder="Write a comment" required></textarea>
+    <button>Comment</button>
+  </form>
+
+  <p class="small">Made{% if oc.author %} by {{ oc.author.name }}{% endif %} on {{ c.created_at|day }}{% if c.done_at %}, done on {{ c.done_at|day }}{% endif %}.</p>
+  <details class="edit">
+    <summary>Delete the card</summary>
+    <form method="post" action="{{ url_for('delete_card', cid=c.id) }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Delete #{{ c.ref }} for good</button>
+    </form>
+  </details>
+</aside>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='board.js') }}" defer></script>{% endblock %}

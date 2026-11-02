@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block crumbs %}<span class="sep">/</span><a href="{{ url_for('workspace', wid=w.id) }}">{{ w.name }}</a>{% endblock %}
+{% block body %}
+<h1>{{ w.name }}</h1>
+
+<h2>Boards</h2>
+<div class="tiles">
+  {% for b in boards %}<a class="boardlink" href="{{ url_for('board', bid=b.id) }}">{{ b.name }}</a>{% endfor %}
+</div>
+<form method="post" action="{{ url_for('new_board', wid=w.id) }}" class="row panel add">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input name="name" class="grow" placeholder="New board" required>
+  <button>Add board</button>
+</form>
+
+<h2>Members</h2>
+<div class="scroll panel">
+<table>
+<thead><tr><th>Name</th><th class="wide">Email</th><th>Login</th></tr></thead>
+<tbody>
+{% for u in people %}
+<tr>
+  <td><span class="avatar sm a{{ u.id % 8 }}">{{ u.name|initials }}</span> {{ u.name }}</td>
+  <td class="wide">{{ u.email }}</td>
+  <td class="small">
+    {% if u.pw_hash %}active
+    {% else %}{% if u.invite_expires and u.invite_expires > now %}invited, link works until {{ u.invite_expires|when }}{% else %}not invited yet{% endif %}
+      <form method="post" action="{{ url_for('workspace_link', wid=w.id, uid=u.id) }}" class="inline">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="link">Make an invite link</button>
+      </form>
+    {% endif %}
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+<form method="post" action="{{ url_for('workspace_invite', wid=w.id) }}" class="row">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input name="name" placeholder="Name" required>
+  <input name="email" type="email" placeholder="Email" required>
+  <button>Add a member</button>
+</form>
+<p class="small">A new member gets an invite link. Send it yourself; it works once, for 7 days.</p>
+
+<h2>Import from Taiga</h2>
+<p class="small">In Taiga, open the project, then Admin, Project and Export. Upload the file here
+to make a board from it. Its people join this workspace.</p>
+<form method="post" action="{{ url_for('import_board', wid=w.id) }}" enctype="multipart/form-data" class="row">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="file" name="file" accept=".json,application/json" required>
+  <button>Import</button>
+</form>
+{% endblock %}

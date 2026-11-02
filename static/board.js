@@ -1,0 +1,193 @@
+// The board's small helpers: drag cards and columns, fold columns and lanes, keys, and a
+// reload when the tab comes back after someone changed the board. Every helper waits for
+// an event; nothing runs on a timer. Without this script, forms and links still do it all.
+document.documentElement.classList.add("js");
+const board = document.getElementById("board");
+const bid = board.dataset.board;
+const csrf = document.querySelector("input[name=csrf]").value;
+const here = location.pathname + location.search;
+
+function post(action, fields) {
+  const form = document.createElement("form");
+  form.method = "post";
+  form.action = action;
+  for (const [name, value] of Object.entries({ csrf, next: here, ...fields })) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.append(input);
+  }
+  document.body.append(form);
+  saveScroll();
+  form.submit();
+}
+
+// Keep the scroll place across the page loads that every change makes.
+const scrollKey = "lanes:scroll:" + location.pathname;
+function saveScroll() {
+  try {
+    sessionStorage.setItem(scrollKey, JSON.stringify([board.scrollLeft, board.scrollTop]));
+  } catch (e) {}
+}
+try {
+  const [x, y] = JSON.parse(sessionStorage.getItem(scrollKey) || "[0,0]");
+  board.scrollLeft = x;
+  board.scrollTop = y;
+} catch (e) {}
+document.addEventListener("submit", saveScroll);
+document.addEventListener("click", (e) => e.target.closest("a") && saveScroll());
+
+// Forms that save as soon as a box is ticked or a choice is made.
+document.addEventListener("change", (e) => {
+  const form = e.target.closest("form[data-autosubmit], form.rename");
+  if (form) form.requestSubmit();
+});
+
+// Folding: each person's own choice, kept in this browser.
+const foldKey = "lanes:fold:" + bid;
+let folded = new Set();
+try {
+  folded = new Set(JSON.parse(localStorage.getItem(foldKey) || "[]"));
+} catch (e) {}
+function showFolds() {
+  for (const el of board.querySelectorAll("[data-col]")) {
+    el.classList.toggle("folded", folded.has("c" + el.dataset.col));
+  }
+  for (const el of board.querySelectorAll("[data-fold-row]")) {
+    const key = el.dataset.foldRow;
+    el.classList.toggle("folded", folded.has(key));
+    const head = el.previousElementSibling;
+    if (head && head.classList.contains("lanehead")) head.classList.toggle("folded", folded.has(key));
+  }
+}
+board.addEventListener("click", (e) => {
+  const button = e.target.closest("button.fold");
+  if (!button) return;
+  const key = button.dataset.fold;
+  folded.has(key) ? folded.delete(key) : folded.add(key);
+  try {
+    localStorage.setItem(foldKey, JSON.stringify([...folded]));
+  } catch (e) {}
+  showFolds();
+});
+showFolds();
+
+// Dragging with pointer events, since some browsers have no desktop drag support.
+// Touch is left alone, so a finger still scrolls; the card panel moves cards there.
+let drag = null;
+for (const el of board.querySelectorAll(".tile, .tile *")) el.draggable = false;
+
+function under(e, selector) {
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  return el && el.closest(selector);
+}
+
+function mark(el) {
+  if (drag.over) drag.over.classList.remove("over");
+  if (el) el.classList.add("over");
+  drag.over = el;
+}
+
+board.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || e.pointerType === "touch") return;
+  if (e.target.closest("input, button, select, textarea, summary, details, form")) return;
+  const tile = e.target.closest(".tile");
+  const head = !tile && e.target.closest(".colhead");
+  if (!tile && !head) return;
+  drag = { el: tile || head, kind: tile ? "card" : "column", x: e.clientX, y: e.clientY };
+});
+
+document.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x;
+  const dy = e.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 6) return; // a small wobble is still a click
+  drag.moved = true;
+  drag.el.classList.add("dragging");
+  drag.el.style.transform = drag.kind === "card" ? `translate(${dx}px, ${dy}px)` : `translateX(${dx}px)`;
+  mark(under(e, drag.kind === "card" ? ".cell" : ".colhead"));
+});
+
+document.addEventListener("pointerup", (e) => {
+  if (!drag) return;
+  const { el, kind, moved, over } = drag;
+  if (over) over.classList.remove("over");
+  el.classList.remove("dragging");
+  el.style.transform = "";
+  drag = null;
+  if (!moved) return;
+  // The drag ends in a click on the card link; that click must not open the card.
+  const block = (c) => c.preventDefault();
+  document.addEventListener("click", block, true);
+  setTimeout(() => document.removeEventListener("click", block, true));
+  if (!over) return;
+  if (kind === "card") dropCard(el, over, e);
+  else if (over !== el) dropColumn(el, over, e);
+});
+
+document.addEventListener("pointercancel", () => {
+  if (!drag) return;
+  if (drag.over) drag.over.classList.remove("over");
+  drag.el.classList.remove("dragging");
+  drag.el.style.transform = "";
+  drag = null;
+});
+
+function dropCard(tile, cell, e) {
+  const before = [...cell.querySelectorAll(".tile")].find((t) => {
+    if (t === tile) return false;
+    const r = t.getBoundingClientRect();
+    return e.clientY < r.top + r.height / 2;
+  });
+  const from = tile.closest(".cells").dataset.row;
+  const to = cell.closest(".cells").dataset.row;
+  post(`/card/${tile.dataset.card}/move`, {
+    column: cell.dataset.col,
+    before: before ? before.dataset.card : "",
+    by: board.dataset.by,
+    from,
+    to,
+  });
+}
+
+function dropColumn(head, target, e) {
+  const r = target.getBoundingClientRect();
+  let before = target;
+  if (e.clientX > r.left + r.width / 2) {
+    before = target.nextElementSibling;
+    if (before && !before.classList.contains("colhead")) before = null;
+  }
+  if (before === head) return;
+  post(`/column/${head.dataset.col}/move`, { before: before ? before.dataset.col : "" });
+}
+
+// Keys: n for a new card, / to search, Esc to close the card or leave a field.
+document.addEventListener("keydown", (e) => {
+  const typing = e.target.closest("input, textarea, select");
+  if (e.key === "Escape") {
+    if (typing) e.target.blur();
+    else document.querySelector("#cardpanel .close")?.click();
+    return;
+  }
+  if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "n") {
+    document.querySelector(".cells:not(.folded) .cell:not(.folded) .addcard input[name=title]")?.focus();
+    e.preventDefault();
+  } else if (e.key === "/") {
+    document.querySelector(".search input[name=q]")?.focus();
+    e.preventDefault();
+  }
+});
+
+// When the tab comes back, ask once whether the board changed while it was away.
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState !== "visible") return;
+  try {
+    const res = await fetch(`/b/${bid}/version`, { credentials: "same-origin" });
+    if (res.ok && (await res.text()).trim() !== board.dataset.version) {
+      saveScroll();
+      location.reload();
+    }
+  } catch (e) {}
+});

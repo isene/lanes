@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Your boards</h1>
+{% for w in spaces %}
+<section class="panel space">
+  <h2><a href="{{ url_for('workspace', wid=w.id) }}">{{ w.name }}</a></h2>
+  <div class="tiles">
+    {% for b in boards[w.id] %}<a class="boardlink" href="{{ url_for('board', bid=b.id) }}">{{ b.name }}</a>{% endfor %}
+    <form method="post" action="{{ url_for('new_board', wid=w.id) }}" class="row addboard">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input name="name" class="grow" placeholder="New board" required>
+      <button>Add</button>
+    </form>
+  </div>
+</section>
+{% else %}
+<p>You are not in any workspace yet. Ask someone in a workspace to invite you.</p>
+{% endfor %}
+{% if me.is_admin %}
+<form method="post" action="{{ url_for('new_workspace') }}" class="row panel add">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input name="name" class="grow" placeholder="New workspace, one per team" required>
+  <button>Add workspace</button>
+</form>
+{% endif %}
+{% endblock %}

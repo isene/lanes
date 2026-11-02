@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('board_colors', bid=b.id, v=b.version) }}">{% endblock %}
+{% block crumbs %}<span class="sep">/</span><a href="{{ url_for('workspace', wid=w.id) }}">{{ w.name }}</a><span class="sep">/</span><a href="{{ url_for('board', bid=b.id) }}">{{ b.name }}</a>{% endblock %}
+{% block body %}
+<h1>Archive</h1>
+<p class="small">Cards that have been done for more than {{ b.archive_days }} days.</p>
+<form method="get" class="row">
+  <input name="q" class="grow" value="{{ q }}" placeholder="Search title, text or #number">
+  <button>Search</button>
+</form>
+<div class="scroll panel">
+<table>
+<thead><tr><th>Card</th><th class="wide">People</th><th>Done</th></tr></thead>
+<tbody>
+{% for c in cards %}
+<tr>
+  <td><a class="open" href="{{ url_for('board', bid=b.id, card=c.id) }}"><span class="ref">#{{ c.ref }}</span> {{ c.title }}</a>
+    {% for l in c.labels %}<span class="label lab-{{ l.id }}">{{ l.name }}</span>{% endfor %}</td>
+  <td class="wide small">{{ c.people|map(attribute='name')|join(', ') }}</td>
+  <td class="small">{{ c.done_at|day }}</td>
+</tr>
+{% else %}
+<tr><td colspan="3" class="small">Nothing here.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

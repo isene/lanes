@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}lanes{% endblock %}</title>
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+<header>
+  <nav class="crumbs">
+    <a class="brand" href="{{ url_for('home') }}"><img src="{{ url_for('static', filename='logo.svg') }}" alt=""><span class="wide">lanes</span></a>
+    {% block crumbs %}{% endblock %}
+  </nav>
+  {% if me %}
+  <nav>
+    {% if me.is_admin %}<a href="{{ url_for('admin') }}">Users</a>{% endif %}
+    <span class="me"><span class="avatar sm">{{ me.name|initials }}</span><span class="wide">{{ me.name }}</span></span>
+    <form method="post" action="{{ url_for('logout') }}" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="link">Log out</button>
+    </form>
+  </nav>
+  {% endif %}
+</header>
+<main>
+{% for m in get_flashed_messages() %}<p class="flash">{{ m }}</p>{% endfor %}
+{% block body %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

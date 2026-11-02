@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Users</h1>
+<div class="scroll panel">
+<table>
+<thead><tr><th>Name</th><th>Email</th><th>Login</th><th></th></tr></thead>
+<tbody>
+{% for u in users %}
+<tr>
+  <td>{{ u.name }}{% if u.is_admin %} <span class="small">(admin)</span>{% endif %}</td>
+  <td>{{ u.email }}</td>
+  <td class="small">{% if u.pw_hash %}active{% elif u.invite_expires and u.invite_expires > now %}invited, link works until {{ u.invite_expires|when }}{% else %}no login yet{% endif %}</td>
+  <td><form method="post" action="{{ url_for('admin_invite', uid=u.id) }}" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="link">New invite link</button></form></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+<p class="small">People join through a workspace. A new invite link logs the person out and
+asks for a new password and phone code.</p>
+{% endblock %}

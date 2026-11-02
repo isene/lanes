@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block body %}
+<form method="post" class="box">
+  <div class="hero"><img src="{{ url_for('static', filename='logo.svg') }}" alt=""><p>Every team, one clear board.</p></div>
+  <h1>Welcome, {{ user.name }}</h1>
+  <p>Set a password and link an authenticator app on your phone.
+  You need both each time you log in.</p>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Password, at least 12 characters
+    <input name="password" type="password" minlength="12" required autocomplete="new-password"></label>
+  <label>The same password again
+    <input name="password2" type="password" minlength="12" required autocomplete="new-password"></label>
+  <p>Scan this code with an authenticator app, such as Microsoft Authenticator or Google Authenticator.</p>
+  <div class="qr">{{ qr }}</div>
+  <p class="small">Or type this key into the app: <code>{{ user.totp_secret }}</code></p>
+  <label>The 6-digit code the app shows
+    <input name="code" inputmode="numeric" required autocomplete="one-time-code"></label>
+  <button>Save and log in</button>
+</form>
+{% endblock %}
