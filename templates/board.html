@@ -80,7 +80,7 @@
       <button type="button" class="fold" data-fold="c{{ col.id }}" title="Fold or open the column">‹</button>
       <span class="vname">{{ col.name }}</span>
       <form method="post" action="{{ url_for('edit_column', pid=col.id) }}" class="rename">
-        {{ hidden() }}<input name="name" value="{{ col.name }}" aria-label="Column name" required>
+        {{ hidden() }}<input name="name" value="{{ col.name }}" aria-label="Column name" autocomplete="off" required>
       </form>
       <span class="count{{ ' over' if col.wip and n > col.wip }}" title="{{ n }} cards{% if col.wip %}, at most {{ col.wip }} wanted{% endif %}">{{ n }}{% if col.wip %}/{{ col.wip }}{% endif %}</span>
       <details class="menu">
@@ -116,7 +116,7 @@
     {% if by %}<span class="lanename">{{ name }}</span>
     {% else %}
     <form method="post" action="{{ url_for('edit_lane', pid=key) }}" class="rename">
-      {{ hidden() }}<input name="name" value="{{ name }}" aria-label="Lane name" required>
+      {{ hidden() }}<input name="name" value="{{ name }}" aria-label="Lane name" autocomplete="off" required>
     </form>
     {% endif %}
     <span class="small">{{ in_row[key] }}</span>

@@ -35,7 +35,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.5.1"
+__version__ = "0.5.2"
 
 ROOT = Path(__file__).resolve().parent
 

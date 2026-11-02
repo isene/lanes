@@ -193,9 +193,11 @@ details.menu > summary:hover, details.menu[open] > summary { background: var(--s
   background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--c, var(--line));
   cursor: grab; }
 .colhead .rename { flex: 1; min-width: 0; }
-.rename input { width: 100%; margin: 0; padding: 2px 6px; border-color: transparent; background: transparent;
+.rename input, .rename .name { width: 100%; margin: 0; padding: 2px 6px; border-color: transparent; background: transparent;
   font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
-.rename input:hover { border-color: var(--line); }
+.rename input:hover, .rename .name:hover { border-color: var(--line); }
+.rename .name { display: block; border: 1px solid transparent; border-radius: 9px; color: var(--fg);
+  text-align: left; cursor: text; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .count { color: var(--muted); font-size: 12px; font-weight: 600; padding: 0 4px; }
 .count.over { color: #fff; background: var(--danger); border-radius: 6px; }
 .vname { display: none; }
@@ -207,8 +209,8 @@ button.fold:hover { color: var(--fg); background: var(--soft); }
 .addlane { max-width: 260px; margin-top: 8px; }
 .lanehead { position: sticky; left: 0; display: flex; align-items: center; gap: 6px; width: fit-content;
   margin: 12px 0 5px; }
-.lanehead .rename input, .lanename { font-size: 14px; font-weight: 700; text-transform: none; letter-spacing: 0; }
-.lanehead .rename input { width: 220px; }
+.lanehead .rename input, .lanehead .rename .name, .lanename { font-size: 14px; font-weight: 700; text-transform: none; letter-spacing: 0; }
+.lanehead .rename input, .lanehead .rename .name { width: 220px; }
 .lanehead.folded button.fold { transform: rotate(-90deg); }
 .cells.folded { display: none; }
 .cell { display: flex; flex-direction: column; gap: 6px; min-height: 52px; padding: 6px;

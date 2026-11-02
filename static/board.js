@@ -44,6 +44,25 @@ document.addEventListener("change", (e) => {
   if (form) form.requestSubmit();
 });
 
+// Column and lane names show as plain text, so a slip of the finger or a password manager
+// cannot change them. A click turns a name into a box; Enter or a click elsewhere saves it,
+// and Esc puts the old name back.
+for (const input of board.querySelectorAll("form.rename input[name=name]")) {
+  const name = document.createElement("button");
+  name.type = "button";
+  name.className = "name";
+  name.title = "Click to rename";
+  name.textContent = input.value;
+  input.replaceWith(name);
+  name.addEventListener("click", () => {
+    name.replaceWith(input);
+    input.focus();
+    input.select();
+  });
+  // A changed name is being saved, and the page reloads with it.
+  input.addEventListener("blur", () => input.value === input.defaultValue && input.replaceWith(name));
+}
+
 // Folding: each person's own choice, kept in this browser.
 const foldKey = "lanes:fold:" + bid;
 let folded = new Set();
@@ -166,7 +185,10 @@ function dropColumn(head, target, e) {
 document.addEventListener("keydown", (e) => {
   const typing = e.target.closest("input, textarea, select");
   if (e.key === "Escape") {
-    if (typing) e.target.blur();
+    if (typing) {
+      if (e.target.form?.matches(".rename")) e.target.value = e.target.defaultValue;
+      e.target.blur();
+    }
     else document.querySelector("#cardpanel .close")?.click();
     return;
   }
