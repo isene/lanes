@@ -42,8 +42,10 @@ Enough to move one team off Taiga.
   sees a workspace they are not a member of. An admin can remove a member.
 - Boards with columns (name, colour, a limit on how many cards), lanes and
   cards.
-- Cards: a number (#123), title, text, people, labels, sub-tasks and
-  comments.
+- Cards: a number (#123), title, text, people, labels, sub-tasks, a due date
+  and comments. A card past its date turns red, and a red dot on each person's picture
+  counts their late cards.
+- `app.py overdue WORKSPACE-ID` prints the late cards by person, ready to post to a chat.
 - A profile page for name, picture, password, and light or dark colours.
 - A workspace logo at the top left that leads back to the last board you opened.
 - Drag cards between columns and lanes with the mouse. On a phone, the
@@ -56,7 +58,7 @@ Enough to move one team off Taiga.
 
 ## Later
 
-- Files on cards, extra fields per board, due dates.
+- Files on cards, extra fields per board.
 - Live changes while you look at the board.
 - Import from Trello.
 - Mail when someone names you in a comment.

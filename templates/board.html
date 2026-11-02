@@ -15,8 +15,9 @@
     {% endfor %}
     {% if c.open_subs|length > 5 %}<span class="small">and {{ c.open_subs|length - 5 }} more</span>{% endif %}
   </span>{% endif %}
-  {% if c.people or c.n_sub or c.n_comments %}
+  {% if c.people or c.n_sub or c.n_comments or c.due %}
   <span class="facts">
+    {% if c.due %}<span class="due{{ ' late' if c.late }}" title="{{ 'Past its date' if c.late else 'Due' }}">{{ c.due|short }}</span>{% endif %}
     {% if c.n_sub %}<span class="progress" title="{{ c.n_sub_done }} of {{ c.n_sub }} sub-tasks done"><progress value="{{ c.n_sub_done }}" max="{{ c.n_sub }}"></progress>{{ c.n_sub_done }}/{{ c.n_sub }}</span>{% endif %}
     {% if c.n_comments %}<span title="Comments">💬 {{ c.n_comments }}</span>{% endif %}
     <span class="people">{% for p in c.people %}{{ avatar(p.id, p.name, p.pic, 'xs') }}{% endfor %}</span>
@@ -34,8 +35,8 @@
     <a class="{{ 'on' if by == 'label' }}" href="{{ view(by='label') }}">Labels</a>
   </nav>
   <div class="chips">
-    {% for p in people %}<a class="chip{{ ' on' if p.id in who }}" title="Only cards for {{ p.name }}"
-      href="{{ view(who=(who|reject('equalto', p.id)|list) if p.id in who else who + [p.id]) }}">{{ avatar(p.id, p.name, p.pic, 'xs') }}</a>{% endfor %}
+    {% for p in people %}<a class="chip{{ ' on' if p.id in who }}" title="Only cards for {{ p.name }}{% if late[p.id] %}; {{ late[p.id] }} past their date{% endif %}"
+      href="{{ view(who=(who|reject('equalto', p.id)|list) if p.id in who else who + [p.id]) }}">{{ avatar(p.id, p.name, p.pic, 'xs') }}{% if late[p.id] %}<span class="dot">{{ late[p.id] }}</span>{% endif %}</a>{% endfor %}
     {% for l in labels %}<a class="label lab-{{ l.id }}{{ ' on' if l.id in lab }}"
       href="{{ view(label=(lab|reject('equalto', l.id)|list) if l.id in lab else lab + [l.id]) }}">{{ l.name }}</a>{% endfor %}
   </div>
@@ -166,6 +167,7 @@
     {{ hidden() }}
     <label>Column <select name="column">{% for col in cols %}<option value="{{ col.id }}"{{ ' selected' if col.id == c.column_id }}>{{ col.name }}</option>{% endfor %}</select></label>
     {% if lanes %}<label>Lane <select name="lane">{% for ln in lanes %}<option value="{{ ln.id }}"{{ ' selected' if ln.id == c.lane_id }}>{{ ln.name }}</option>{% endfor %}</select></label>{% endif %}
+    <label>Due <input type="date" name="due" value="{{ c.due or '' }}"></label>
     <button class="nojs">Move</button>
   </form>
 

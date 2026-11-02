@@ -35,7 +35,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -53,6 +53,7 @@ DEV = os.environ.get("LANES_DEV") == "1"
 BASE_URL = os.environ.get("LANES_URL", "http://127.0.0.1:8092").rstrip("/")
 INVITE_DAYS = 7
 COLOR = re.compile(r"#[0-9a-fA-F]{6}")
+DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -89,7 +90,7 @@ CREATE TABLE IF NOT EXISTS cards (
   lane_id INTEGER REFERENCES lanes(id), title TEXT NOT NULL,
   body TEXT NOT NULL DEFAULT '', pos REAL NOT NULL,
   created_by INTEGER REFERENCES users(id), created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL, done_at INTEGER);
+  updated_at INTEGER NOT NULL, done_at INTEGER, due TEXT);
 CREATE INDEX IF NOT EXISTS cards_board ON cards(board_id, column_id);
 CREATE TABLE IF NOT EXISTS card_people (
   card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
@@ -128,6 +129,10 @@ def now() -> int:
     return int(time.time())
 
 
+def today() -> str:
+    return time.strftime("%Y-%m-%d")
+
+
 # Database
 
 
@@ -161,6 +166,7 @@ def init_db() -> None:
             ("users", "pic", "INTEGER NOT NULL DEFAULT 0"),
             ("users", "theme", "TEXT NOT NULL DEFAULT ''"),
             ("workspaces", "logo", "INTEGER NOT NULL DEFAULT 0"),
+            ("cards", "due", "TEXT"),
         ):
             if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
@@ -300,6 +306,12 @@ def when(ts: int | None) -> str:
 @app.template_filter("day")
 def day(ts: int | None) -> str:
     return time.strftime("%Y-%m-%d", time.localtime(ts)) if ts else ""
+
+
+@app.template_filter("short")
+def short(date: str) -> str:
+    """2026-11-05 becomes 5 Nov."""
+    return datetime.strptime(date, "%Y-%m-%d").strftime("%-d %b")
 
 
 @app.template_filter("initials")
@@ -698,9 +710,11 @@ def card_facts(bid: int, where: str = "", args: tuple = ()) -> list:
         (bid,),
     ):
         subs.setdefault(r["card_id"], []).append(r)
+    day = today()
     return [
         dict(
             r,
+            late=bool(r["due"] and r["due"] < day and not r["col_done"]),
             people=people.get(r["id"], []),
             labels=labels.get(r["id"], []),
             open_subs=subs.get(r["id"], []),
@@ -731,8 +745,11 @@ def board(bid):
     where, args = archived(b)
     cards = card_facts(bid, where, args)
     per_column: dict = {}
+    late: dict = {}  # person -> cards past their date
     for c in cards:
         per_column[c["column_id"]] = per_column.get(c["column_id"], 0) + 1
+        for p in c["people"] if c["late"] else []:
+            late[p["id"]] = late.get(p["id"], 0) + 1
 
     by = request.args.get("by", "")
     who = request.args.getlist("who", type=int)
@@ -799,6 +816,7 @@ def board(bid):
         cells=cells,
         in_row=in_row,
         per_column=per_column,
+        late=late,
         by=by,
         who=who,
         lab=lab,
@@ -1170,6 +1188,11 @@ def edit_card(cid):
         con.execute("UPDATE cards SET title = ? WHERE id = ?", (f["title"].strip(), cid))
     if "body" in f:
         con.execute("UPDATE cards SET body = ? WHERE id = ?", (f["body"].strip(), cid))
+    if "due" in f:  # an empty date clears it
+        due = f["due"].strip()
+        con.execute(
+            "UPDATE cards SET due = ? WHERE id = ?", (due if DATE.fullmatch(due) else None, cid)
+        )
     col = con.execute(
         "SELECT * FROM columns WHERE id = ? AND board_id = ?", (int_or_none(f.get("column")), bid)
     ).fetchone()
@@ -1559,10 +1582,14 @@ def profile():
 def admin():
     admin_only()
     # Someone taken off every workspace has left; the account stays for their old comments.
-    users = db().execute(
-        "SELECT * FROM users u WHERE u.is_admin"
-        " OR EXISTS (SELECT 1 FROM members m WHERE m.user_id = u.id) ORDER BY name"
-    ).fetchall()
+    users = (
+        db()
+        .execute(
+            "SELECT * FROM users u WHERE u.is_admin"
+            " OR EXISTS (SELECT 1 FROM members m WHERE m.user_id = u.id) ORDER BY name"
+        )
+        .fetchall()
+    )
     return render_template("admin.html", users=users)
 
 
@@ -1576,6 +1603,26 @@ def admin_invite(uid):
     return redirect(url_for("admin"))
 
 
+def overdue(con: sqlite3.Connection, wid: int) -> str:
+    """A message that lists a workspace's cards past their date, by person. Empty if there are none."""
+    rows = con.execute(
+        "SELECT c.id, c.ref, c.title, c.due, c.board_id, u.name FROM cards c"
+        " JOIN columns col ON col.id = c.column_id JOIN boards b ON b.id = c.board_id"
+        " LEFT JOIN card_people p ON p.card_id = c.id LEFT JOIN users u ON u.id = p.user_id"
+        " WHERE b.workspace_id = ? AND c.due < ? AND NOT col.done"
+        " ORDER BY u.name IS NULL, u.name, c.due, c.ref",
+        (wid, today()),
+    ).fetchall()
+    lines, who = [], False
+    for r in rows:
+        if r["name"] != who:
+            who = r["name"]
+            lines.append(f"@{who}" if who else "Nobody")
+        link = f"{BASE_URL}/b/{r['board_id']}?card={r['id']}"
+        lines.append(f"- #{r['ref']} {r['title']} (due {short(r['due'])}) {link}")
+    return "Cards past their date:\n" + "\n".join(lines) if lines else ""
+
+
 def main(args: list) -> None:
     init_db()
     if args[:1] == ["adduser"] and len(args) >= 3:
@@ -1587,12 +1634,15 @@ def main(args: list) -> None:
         with closing(connect()) as con:
             row = con.execute("SELECT id FROM users WHERE email = ?", (args[1].lower(),)).fetchone()
             print(make_invite(con, row["id"]) if row else "No such user.")
+    elif args[:1] == ["overdue"] and len(args) == 2:
+        with closing(connect()) as con:
+            print(overdue(con, int(args[1])))
     elif not args:
         from waitress import serve
 
         serve(app, host="127.0.0.1", port=int(os.environ.get("LANES_PORT", "8092")), threads=8)
     else:
-        print("usage: app.py [adduser EMAIL NAME [--admin] | invite EMAIL]")
+        print("usage: app.py [adduser EMAIL NAME [--admin] | invite EMAIL | overdue WORKSPACE-ID]")
 
 
 if __name__ == "__main__":

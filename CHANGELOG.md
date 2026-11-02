@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 (2026-11-02)
+
+- A card can have a due date. It shows on the card, in red once the date has passed and the
+  card is not done.
+- A red dot on each person's picture in the filter bar counts their cards past their date.
+- `app.py overdue WORKSPACE-ID` prints a message that lists the cards past their date, by
+  person, with links. A script can post it to a team chat.
+
 ## 0.4.0 (2026-11-02)
 
 - An admin can remove a member from the workspace page. Their cards and comments keep their

@@ -379,3 +379,32 @@ def test_an_admin_takes_someone_off_a_workspace():
     post(jo, f"/w/{wid}/remove/{kim_id}")
     assert not q("SELECT 1 FROM members WHERE user_id = ?", kim_id)
     assert kim.get(f"/w/{wid}").status_code == 404
+
+
+def test_a_card_past_its_date_shows_red_and_is_listed_by_person():
+    uma, uma_id = user("uma@example.com", "Uma Ink", admin=True)
+    wid, bid = workspace_with_board(uma)
+    todo, _doing, done = [
+        r[0] for r in q("SELECT id FROM columns WHERE board_id = ? ORDER BY pos", bid)
+    ]
+    post(uma, f"/b/{bid}/cards/new", title="Renew domain", column=todo)
+    post(uma, f"/b/{bid}/cards/new", title="Order disks", column=todo)
+    late, soon = [r[0] for r in q("SELECT id FROM cards WHERE board_id = ? ORDER BY id", bid)]
+    post(uma, f"/card/{late}/edit", people="1", person=str(uma_id))
+    post(uma, f"/card/{late}/edit", due="2020-01-05")
+    post(uma, f"/card/{soon}/edit", due="2999-12-31")
+    page = uma.get(f"/b/{bid}").data.decode()
+    assert 'class="due late"' in page and "5 Jan" in page and "31 Dec" in page
+    assert '<span class="dot">1</span>' in page
+    with lanes.connect() as con:
+        message = lanes.overdue(con, wid)
+    assert message.splitlines()[1:] == [
+        "@Uma Ink",
+        f"- #1 Renew domain (due 5 Jan) {lanes.BASE_URL}/b/{bid}?card={late}",
+    ]
+    post(uma, f"/card/{late}/move", column=done)  # done is never late
+    with lanes.connect() as con:
+        assert lanes.overdue(con, wid) == ""
+    assert 'class="dot"' not in uma.get(f"/b/{bid}").data.decode()
+    post(uma, f"/card/{soon}/edit", due="")
+    assert q("SELECT due FROM cards WHERE id = ?", soon)[0][0] is None

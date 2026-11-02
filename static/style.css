@@ -163,8 +163,11 @@ img.avatar { object-fit: cover; background: var(--soft); }
 .views a { padding: 4px 11px; color: var(--muted); text-decoration: none; font-size: 13px; background: var(--panel); }
 .views a.on { color: #fff; background: linear-gradient(135deg, var(--btn1), var(--btn2)); }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-.chip { border-radius: 50%; opacity: .55; text-decoration: none; }
-.chip.on, .chip:hover { opacity: 1; }
+.chip { position: relative; border-radius: 50%; text-decoration: none; }
+.chip .avatar { opacity: .55; }
+.chip.on .avatar, .chip:hover .avatar { opacity: 1; }
+.chip .dot { position: absolute; top: -5px; right: -6px; min-width: 15px; padding: 0 3px; border-radius: 8px;
+  color: #fff; background: var(--danger); font-size: 10px; font-weight: 700; line-height: 15px; text-align: center; }
 .chip.on .avatar { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
 .chips .label { opacity: .6; }
 .chips .label.on, .chips .label:hover { opacity: 1; outline: 2px solid var(--c); }
@@ -233,6 +236,7 @@ button.fold:hover { color: var(--fg); background: var(--soft); }
   color: var(--muted); border-left: 2px solid var(--line); }
 .facts { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
 .facts .people { display: flex; gap: 2px; margin-left: auto; }
+.due.late { color: #fff; background: var(--danger); border-radius: 6px; padding: 0 5px; font-weight: 600; }
 .progress { display: inline-flex; align-items: center; gap: 5px; }
 progress { -webkit-appearance: none; appearance: none; width: 46px; height: 5px; border: 0;
   border-radius: 3px; background: var(--line); }
