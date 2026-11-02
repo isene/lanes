@@ -20,7 +20,7 @@
   <span class="facts">
     {% if c.n_sub %}<span class="progress" title="{{ c.n_sub_done }} of {{ c.n_sub }} sub-tasks done"><progress value="{{ c.n_sub_done }}" max="{{ c.n_sub }}"></progress>{{ c.n_sub_done }}/{{ c.n_sub }}</span>{% endif %}
     {% if c.n_comments %}<span title="Comments">💬 {{ c.n_comments }}</span>{% endif %}
-    <span class="people">{% for p in c.people %}<span class="avatar xs a{{ p.id % 8 }}" title="{{ p.name }}">{{ p.name|initials }}</span>{% endfor %}</span>
+    <span class="people">{% for p in c.people %}{{ avatar(p.id, p.name, p.pic, 'xs') }}{% endfor %}</span>
   </span>
   {% endif %}
 </a>
@@ -36,7 +36,7 @@
   </nav>
   <div class="chips">
     {% for p in people %}<a class="chip{{ ' on' if p.id in who }}" title="Only cards for {{ p.name }}"
-      href="{{ view(who=(who|reject('equalto', p.id)|list) if p.id in who else who + [p.id]) }}"><span class="avatar xs a{{ p.id % 8 }}">{{ p.name|initials }}</span></a>{% endfor %}
+      href="{{ view(who=(who|reject('equalto', p.id)|list) if p.id in who else who + [p.id]) }}">{{ avatar(p.id, p.name, p.pic, 'xs') }}</a>{% endfor %}
     {% for l in labels %}<a class="label lab-{{ l.id }}{{ ' on' if l.id in lab }}"
       href="{{ view(label=(lab|reject('equalto', l.id)|list) if l.id in lab else lab + [l.id]) }}">{{ l.name }}</a>{% endfor %}
   </div>
@@ -73,7 +73,7 @@
 </div>
 
 <div class="board" id="board" data-board="{{ b.id }}" data-version="{{ b.version }}" data-by="{{ by }}">
-  <div class="row head">
+  <div class="brow head">
     {% for col in cols %}{% set n = per_column.get(col.id, 0) %}
     <div class="colhead col-{{ col.id }}" data-col="{{ col.id }}">
       <button type="button" class="fold" data-fold="c{{ col.id }}" title="Fold or open the column">‹</button>
@@ -133,7 +133,7 @@
     {% endif %}
   </div>
   {% endif %}
-  <div class="row cells" data-row="{{ key }}" data-fold-row="l{{ by }}{{ key }}">
+  <div class="brow cells" data-row="{{ key }}" data-fold-row="l{{ by }}{{ key }}">
     {% for col in cols %}
     <div class="cell col-{{ col.id }}" data-col="{{ col.id }}">
       {% for c in cells.get((key, col.id), []) %}{{ tile(c) }}{% endfor %}
@@ -181,7 +181,7 @@
   <form method="post" action="{{ url_for('edit_card', cid=c.id) }}" class="picks" data-autosubmit>
     {{ hidden() }}<input type="hidden" name="people" value="1">
     {% for p in people %}<label class="pick"><input type="checkbox" name="person" value="{{ p.id }}"{{ ' checked' if p.id in oc.people }}>
-      <span class="avatar xs a{{ p.id % 8 }}">{{ p.name|initials }}</span>{{ p.name }}</label>{% endfor %}
+      {{ avatar(p.id, p.name, p.pic, 'xs') }}{{ p.name }}</label>{% endfor %}
     <button class="nojs">Save</button>
   </form>
 
@@ -222,7 +222,7 @@
   <h3>Comments</h3>
   {% for m in oc.comments %}
   <div class="comment">
-    <span class="avatar a{{ m.user_id % 8 }}">{{ m.name|initials }}</span>
+    {{ avatar(m.user_id, m.name, m.pic) }}
     <div class="bubble"><div class="small"><b>{{ m.name }}</b> · {{ m.created_at|when }}</div>{{ m.body|md }}</div>
   </div>
   {% endfor %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Your profile · lanes{% endblock %}
+{% block crumbs %}<span class="sep">/</span><a href="{{ url_for('profile') }}">Your profile</a>{% endblock %}
+{% block body %}
+<div class="profile">
+<h1>Your profile</h1>
+
+<section class="panel">
+  <h3>Picture and name</h3>
+  <form method="post" enctype="multipart/form-data" class="picrow" id="picform">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {{ avatar(me.id, me.name, me.pic, 'big') }}
+    <div>
+      <label>{{ 'A new picture' if me.pic else 'A picture of you' }}
+        <input type="file" name="picture" accept="image/png,image/jpeg,image/webp,image/gif"></label>
+      <button class="nojs">Upload</button>
+      {% if me.pic %}<button name="remove_picture" value="1" class="link danger">Remove the picture</button>{% endif %}
+    </div>
+  </form>
+  <form method="post" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Name <input name="name" value="{{ me.name }}" maxlength="80" required></label>
+    <button>Save</button>
+  </form>
+  <p class="small">Mail: {{ me.email }}. An admin can change it.</p>
+</section>
+
+<section class="panel">
+  <h3>Colours</h3>
+  <form method="post" class="choices" data-autosubmit>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% for value, text in [('', 'Same as this device'), ('light', 'Light'), ('dark', 'Dark')] %}
+    <label class="check"><input type="radio" name="theme" value="{{ value }}"{{ ' checked' if me.theme == value }}> {{ text }}</label>
+    {% endfor %}
+    <button class="nojs">Save</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h3>Password</h3>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Present password <input type="password" name="password" autocomplete="current-password" required></label>
+    <label>New password, at least 12 characters
+      <input type="password" name="new_password" autocomplete="new-password" minlength="12" required></label>
+    <label>The new password again
+      <input type="password" name="new_password2" autocomplete="new-password" minlength="12" required></label>
+    <button>Change the password</button>
+  </form>
+</section>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='profile.js') }}"></script>{% endblock %}

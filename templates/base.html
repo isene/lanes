@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en"{% if me and me.theme %} data-theme="{{ me.theme }}"{% endif %}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -17,7 +17,7 @@
   {% if me %}
   <nav>
     {% if me.is_admin %}<a href="{{ url_for('admin') }}">Users</a>{% endif %}
-    <span class="me"><span class="avatar sm">{{ me.name|initials }}</span><span class="wide">{{ me.name }}</span></span>
+    <a class="me" href="{{ url_for('profile') }}" title="Your profile">{{ avatar(me.id, me.name, me.pic, 'sm') }}<span class="wide">{{ me.name }}</span></a>
     <form method="post" action="{{ url_for('logout') }}" class="inline">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="link">Log out</button>

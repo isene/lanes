@@ -10,6 +10,8 @@ TMP = Path(tempfile.mkdtemp())
 os.environ.update(LANES_DATA=str(TMP / "data"), LANES_DEV="1", LANES_SECRET="test")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from werkzeug.security import check_password_hash
+
 import app as lanes
 
 lanes.init_db()
@@ -301,3 +303,33 @@ def test_taiga_import_keeps_columns_lanes_numbers_and_sub_tasks():
 def test_render_escapes_html_and_links_urls():
     out = str(lanes.render("<script>x</script> see https://example.com/a?b=1&c=2"))
     assert "<script>" not in out and '<a href="https://example.com/a?b=1&amp;c=2">' in out
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + bytes(40)  # only the first bytes are read
+
+
+def test_profile_sets_name_colours_picture_and_password():
+    client, uid = user("pia@example.com", "Pia")
+    post(client, "/me", name="Pia Hansen")
+    post(client, "/me", theme="dark")
+    post(client, "/me", theme="purple")  # not one of the choices, so nothing changes
+    assert tuple(q("SELECT name, theme FROM users WHERE id = ?", uid)[0]) == ("Pia Hansen", "dark")
+    assert 'data-theme="dark"' in client.get("/me").get_data(as_text=True)
+
+    post(client, "/me", picture=(BytesIO(b"<svg onload=alert(1)>"), "x.svg"))
+    assert q("SELECT pic FROM users WHERE id = ?", uid)[0][0] == 0
+    post(client, "/me", picture=(BytesIO(PNG), "me.png"))
+    pic = q("SELECT pic FROM users WHERE id = ?", uid)[0][0]
+    r = client.get(f"/u/{uid}/picture?v={pic}")
+    assert pic and r.mimetype == "image/png" and r.data == PNG
+    assert f'src="/u/{uid}/picture?v={pic}"' in client.get("/me").get_data(as_text=True)
+    post(client, "/me", remove_picture="1")
+    assert client.get(f"/u/{uid}/picture").status_code == 404
+
+    new = "a much longer password"
+    post(client, "/me", password="wrong", new_password=new, new_password2=new)
+    assert check_password_hash(
+        q("SELECT pw_hash FROM users WHERE id = ?", uid)[0][0], "correct horse battery"
+    )
+    post(client, "/me", password="correct horse battery", new_password=new, new_password2=new)
+    assert check_password_hash(q("SELECT pw_hash FROM users WHERE id = ?", uid)[0][0], new)

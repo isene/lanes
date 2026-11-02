@@ -35,7 +35,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -58,7 +58,10 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
   pw_hash TEXT, totp_secret TEXT, is_admin INTEGER NOT NULL DEFAULT 0,
-  invite_token TEXT, invite_expires INTEGER, created_at INTEGER NOT NULL);
+  invite_token TEXT, invite_expires INTEGER, created_at INTEGER NOT NULL,
+  pic INTEGER NOT NULL DEFAULT 0, theme TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS pictures (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id), type TEXT NOT NULL, data BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS workspaces (
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS members (
@@ -149,6 +152,14 @@ def init_db() -> None:
     with closing(connect()) as con:
         con.execute("PRAGMA journal_mode = WAL")
         con.executescript(SCHEMA)
+        # Columns added after 0.1.0; a database made before then gets them here.
+        have = {r[1] for r in con.execute("PRAGMA table_info(users)")}
+        for col, kind in (
+            ("pic", "INTEGER NOT NULL DEFAULT 0"),
+            ("theme", "TEXT NOT NULL DEFAULT ''"),
+        ):
+            if col not in have:
+                con.execute(f"ALTER TABLE users ADD COLUMN {col} {kind}")
 
 
 def bump(con: sqlite3.Connection, bid: int) -> None:
@@ -269,6 +280,17 @@ def day(ts: int | None) -> str:
 def initials(name: str) -> str:
     parts = name.split()
     return (parts[0][:1] + (parts[-1][:1] if len(parts) > 1 else "")).upper()
+
+
+@app.template_global()
+def avatar(uid: int, name: str, pic: int = 0, size: str = "") -> Markup:
+    """A person's picture, or their initials on a colour of their own."""
+    if pic:
+        src = url_for("picture", uid=uid, v=pic)
+        return Markup('<img class="avatar {}" src="{}" alt="" title="{}">').format(size, src, name)
+    return Markup('<span class="avatar {} a{}" title="{}">{}</span>').format(
+        size, uid % 8, name, initials(name)
+    )
 
 
 @app.template_filter("md")
@@ -605,7 +627,7 @@ def card_facts(bid: int, where: str = "", args: tuple = ()) -> list:
     ).fetchall()
     people: dict = {}
     for r in con.execute(
-        "SELECT p.card_id, u.id, u.name FROM card_people p JOIN users u ON u.id = p.user_id"
+        "SELECT p.card_id, u.id, u.name, u.pic FROM card_people p JOIN users u ON u.id = p.user_id"
         " JOIN cards c ON c.id = p.card_id WHERE c.board_id = ? ORDER BY u.name",
         (bid,),
     ):
@@ -754,7 +776,7 @@ def card_panel(bid: int, cid: int) -> dict | None:
             "SELECT * FROM subtasks WHERE card_id = ? ORDER BY pos", (cid,)
         ).fetchall(),
         "comments": con.execute(
-            "SELECT m.*, u.name FROM comments m JOIN users u ON u.id = m.user_id"
+            "SELECT m.*, u.name, u.pic FROM comments m JOIN users u ON u.id = m.user_id"
             " WHERE card_id = ? ORDER BY m.id",
             (cid,),
         ).fetchall(),
@@ -1365,6 +1387,78 @@ def import_board(wid):
 def admin_only() -> None:
     if not current_user()["is_admin"]:
         abort(403)
+
+
+# Profile: each person's name, picture, colours and password
+
+PICTURE_TYPES = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF8", "image/gif"),
+)
+PICTURE_MAX = 1024 * 1024  # the page shrinks a picture to 256 pixels before it sends it
+
+
+def picture_type(data: bytes) -> str | None:
+    """The type of a PNG, JPEG, GIF or WebP picture, read from its first bytes; None for others."""
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return next((kind for magic, kind in PICTURE_TYPES if data.startswith(magic)), None)
+
+
+@app.route("/u/<int:uid>/picture")
+def picture(uid):
+    row = db().execute("SELECT type, data FROM pictures WHERE user_id = ?", (uid,)).fetchone()
+    if not row:
+        abort(404)
+    resp = Response(row["data"], mimetype=row["type"])
+    resp.headers["Cache-Control"] = "private, max-age=31536000, immutable"  # the link has a version
+    return resp
+
+
+@app.route("/me", methods=["GET", "POST"])
+def profile():
+    if request.method == "GET":
+        return render_template("profile.html")
+    con, me, f = db(), current_user(), request.form
+    if "name" in f:
+        name = f["name"].strip()[:80]
+        if name:
+            con.execute("UPDATE users SET name = ? WHERE id = ?", (name, me["id"]))
+    if f.get("theme") in ("", "light", "dark"):
+        con.execute("UPDATE users SET theme = ? WHERE id = ?", (f["theme"], me["id"]))
+    if f.get("remove_picture"):
+        con.execute("DELETE FROM pictures WHERE user_id = ?", (me["id"],))
+        con.execute("UPDATE users SET pic = 0 WHERE id = ?", (me["id"],))
+    elif request.files.get("picture"):
+        data = request.files["picture"].read(PICTURE_MAX + 1)
+        kind = picture_type(data)
+        if len(data) > PICTURE_MAX:
+            flash("That picture is over 1 MB. Pick a smaller one.")
+        elif not kind:
+            flash("Use a PNG, JPEG, GIF or WebP picture.")
+        else:
+            con.execute(
+                "INSERT OR REPLACE INTO pictures (user_id, type, data) VALUES (?, ?, ?)",
+                (me["id"], kind, data),
+            )
+            con.execute("UPDATE users SET pic = ? WHERE id = ?", (now(), me["id"]))
+    if "password" in f:
+        new = f.get("new_password", "")
+        if not check_password_hash(me["pw_hash"], f["password"]):
+            flash("The present password is wrong.")
+        elif len(new) < 12:
+            flash("Use at least 12 characters.")
+        elif new != f.get("new_password2"):
+            flash("The two new passwords differ.")
+        else:
+            con.execute(
+                "UPDATE users SET pw_hash = ? WHERE id = ?",
+                (generate_password_hash(new), me["id"]),
+            )
+            flash("Your password is changed.")
+    con.commit()
+    return redirect(url_for("profile"))
 
 
 @app.route("/admin")

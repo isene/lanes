@@ -20,7 +20,7 @@
 <tbody>
 {% for u in people %}
 <tr>
-  <td><span class="avatar sm a{{ u.id % 8 }}">{{ u.name|initials }}</span> {{ u.name }}</td>
+  <td>{{ avatar(u.id, u.name, u.pic, 'sm') }} {{ u.name }}</td>
   <td class="wide">{{ u.email }}</td>
   <td class="small">
     {% if u.pw_hash %}active

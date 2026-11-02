@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 (2026-11-02)
+
+- A profile page, reached from your name at the top: name, picture, password, and colours.
+- Colours can be light, dark, or the same as the device. The choice follows you to every device.
+- A picture is shrunk to 256 pixels in the browser before it is sent, and shows on cards.
+- Fixed: the tick box in a column's menu took the whole width and squeezed its text.
+
 ## 0.1.0 (2026-11-02)
 
 - Boards with columns, lanes and cards, inside workspaces that only their members see.
