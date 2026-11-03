@@ -30,11 +30,18 @@ function saveScroll() {
     sessionStorage.setItem(scrollKey, JSON.stringify([board.scrollLeft, board.scrollTop]));
   } catch (e) {}
 }
+let [scrollX, scrollY] = [0, 0];
 try {
-  const [x, y] = JSON.parse(sessionStorage.getItem(scrollKey) || "[0,0]");
-  board.scrollLeft = x;
-  board.scrollTop = y;
+  [scrollX, scrollY] = JSON.parse(sessionStorage.getItem(scrollKey) || "[0,0]");
 } catch (e) {}
+function restoreScroll() {
+  board.scrollLeft = scrollX;
+  board.scrollTop = scrollY;
+}
+restoreScroll();
+// WebKit (Safari, gaze) can run this before the style sheet is in, when the board cannot
+// scroll yet. Then try once more when the page has loaded.
+if (board.scrollTop !== scrollY) addEventListener("load", restoreScroll, { once: true });
 document.addEventListener("submit", saveScroll);
 document.addEventListener("click", (e) => e.target.closest("a") && saveScroll());
 

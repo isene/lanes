@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.4 (2026-11-03)
+
+- Moving a card no longer throws the board back to the top in Safari and other WebKit
+  browsers. They can run the page script before the style sheet is in, when the board
+  cannot scroll yet, so the scroll place is set once more when the page has loaded.
+
 ## 0.5.3 (2026-11-03)
 
 - The invite page shows the email next to the new password, and the password form on the
