@@ -413,3 +413,15 @@ def test_a_card_past_its_date_shows_red_and_is_listed_by_person():
     post(uma, f"/card/{soon}/edit", due="")
     assert q("SELECT due FROM cards WHERE id = ?", soon)[0][0] is None
     assert lanes.parse_day("3.12") == lanes.today()[:4] + "-12-03"
+
+
+def test_password_forms_name_the_account_for_password_managers():
+    with lanes.connect() as con:
+        uid = lanes.find_or_add_user(con, "vic@example.com", "Vic")
+        link = lanes.make_invite(con, uid)
+    page = lanes.app.test_client().get(link.replace(lanes.BASE_URL, "")).data.decode()
+    assert 'value="vic@example.com" readonly autocomplete="username"' in page
+    wes, _ = user("wes@example.com", "Wes")
+    assert (
+        'value="wes@example.com" readonly autocomplete="username"' in wes.get("/me").data.decode()
+    )

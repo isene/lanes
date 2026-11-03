@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.3 (2026-11-03)
+
+- The invite page shows the email next to the new password, and the password form on the
+  profile page carries it too. A password manager needs it to save the password under the
+  right account.
+
 ## 0.5.2 (2026-11-02)
 
 - Column and lane names show as plain text, so a password manager no longer sees them as
