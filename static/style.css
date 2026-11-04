@@ -277,3 +277,17 @@ button.x { color: var(--muted); text-decoration: none; font-size: 17px; }
   .colhead, .cell { min-width: 78vw; }
   .search input { width: 140px; }
 }
+
+/* The due date's calendar, under its box */
+label.due { position: relative; }
+.cal { position: absolute; z-index: 30; top: 100%; left: 0; width: 260px; margin-top: 4px; padding: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 9px; box-shadow: var(--shadow); }
+.calhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+  color: var(--fg); font-weight: 600; }
+.calgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.calgrid b { padding: 4px 0; font-size: 12px; color: var(--muted); }
+.cal button { padding: 6px 0; background: none; color: var(--fg); font-weight: 500; }
+.calhead button { padding: 0 10px; font-size: 18px; }
+.cal button:hover { background: var(--soft); filter: none; }
+.cal button.today { color: var(--accent); font-weight: 700; }
+.cal button.on { background: var(--accent); color: #fff; }

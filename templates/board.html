@@ -177,7 +177,7 @@
     {{ hidden() }}
     <label>Column <select name="column">{% for col in cols %}<option value="{{ col.id }}"{{ ' selected' if col.id == c.column_id }}>{{ col.name }}</option>{% endfor %}</select></label>
     {% if lanes %}<label>Lane <select name="lane">{% for ln in lanes %}<option value="{{ ln.id }}"{{ ' selected' if ln.id == c.lane_id }}>{{ ln.name }}</option>{% endfor %}</select></label>{% endif %}
-    <label>Due <input type="date" name="due" value="{{ c.due or '' }}" placeholder="2026-11-14"></label>
+    <label class="due">Due <input name="due" value="{{ c.due or '' }}" placeholder="2026-11-14" title="2026-11-14, 14.11.2026 or 14.11" autocomplete="off"></label>
     <button class="nojs">Move</button>
   </form>
 

@@ -47,8 +47,6 @@ document.addEventListener("click", (e) => e.target.closest("a") && saveScroll())
 
 // Forms that save as soon as a box is ticked or a choice is made.
 document.addEventListener("change", (e) => {
-  // Typing a year gives 0002, 0020 and 0202 on the way to 2026, so wait for the whole year.
-  if (e.target.type === "date" && e.target.value.startsWith("0")) return;
   const form = e.target.closest("form[data-autosubmit], form.rename");
   if (form) form.requestSubmit();
 });
@@ -194,6 +192,56 @@ function dropColumn(head, target, e) {
 const newMenu = document.querySelector("details.new");
 const newTitle = newMenu?.querySelector("input[name=title]");
 newMenu?.addEventListener("toggle", () => newMenu.open && newTitle.focus());
+
+// The due date: type it, or pick a day in the calendar that opens under the box.
+// It is drawn here, since a browser's own date box takes no typed ISO date.
+const due = document.querySelector("#cardpanel input[name=due]");
+if (due) {
+  const cal = document.createElement("div");
+  cal.className = "cal";
+  cal.hidden = true;
+  due.after(cal);
+  const iso = (d) =>
+    [d.getFullYear(), d.getMonth() + 1, d.getDate()].map((n) => String(n).padStart(2, "0")).join("-");
+  let shown; // the first day of the month on show
+  const draw = () => {
+    const y = shown.getFullYear();
+    const m = shown.getMonth();
+    const name = shown.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+    let html =
+      `<div class="calhead"><button type="button" data-step="-1" aria-label="Month before">‹</button>` +
+      `<span>${name}</span><button type="button" data-step="1" aria-label="Month after">›</button></div>` +
+      `<div class="calgrid">` +
+      ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => `<b>${d}</b>`).join("") +
+      "<i></i>".repeat((new Date(y, m, 1).getDay() + 6) % 7); // weeks start on Monday
+    for (let d = 1; d <= new Date(y, m + 1, 0).getDate(); d++) {
+      const day = iso(new Date(y, m, d));
+      const cls = [day === iso(new Date()) && "today", day === due.value && "on"].filter(Boolean);
+      html += `<button type="button" data-day="${day}" class="${cls.join(" ")}">${d}</button>`;
+    }
+    cal.innerHTML = html + "</div>";
+  };
+  due.addEventListener("focus", () => {
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(due.value) ? new Date(due.value + "T00:00") : new Date();
+    shown = new Date(d.getFullYear(), d.getMonth(), 1);
+    draw();
+    cal.hidden = false;
+  });
+  due.addEventListener("blur", () => (cal.hidden = true));
+  cal.addEventListener("mousedown", (e) => e.preventDefault()); // the box keeps the focus
+  cal.addEventListener("click", (e) => {
+    const button = e.target.closest("button");
+    if (!button) return;
+    if (button.dataset.step) {
+      shown.setMonth(shown.getMonth() + Number(button.dataset.step));
+      draw();
+    } else {
+      due.value = button.dataset.day;
+      cal.hidden = true;
+      due.form.requestSubmit();
+    }
+  });
+}
 
 // Keys: n for a new card, / to search, Esc to close the card or leave a field.
 document.addEventListener("keydown", (e) => {

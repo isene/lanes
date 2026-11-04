@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 (2026-11-04)
+
+- The due date box takes a typed date again (2026-11-14, 14.11.2026 or 14.11). A click on
+  it opens a calendar drawn by the page, so it works the same in every browser. The
+  browser's own date box took no typed ISO date, and its calendar ignored clicks in gaze.
+
 ## 0.6.0 (2026-11-04)
 
 - A new card opens in the card panel at once, so its people, labels and date can be set
