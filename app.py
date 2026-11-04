@@ -35,7 +35,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.6.1"
+__version__ = "0.7.0"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -108,6 +108,11 @@ CREATE TABLE IF NOT EXISTS comments (
   id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL,
   created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS attachments (
+  id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, data BLOB NOT NULL,
+  user_id INTEGER REFERENCES users(id), created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS attachments_card ON attachments(card_id);
 """
 
 app = Flask(__name__)
@@ -179,6 +184,7 @@ def init_db() -> None:
             ("users", "theme", "TEXT NOT NULL DEFAULT ''"),
             ("workspaces", "logo", "INTEGER NOT NULL DEFAULT 0"),
             ("cards", "due", "TEXT"),
+            ("cards", "cover", "INTEGER"),  # the attached picture shown on the card
         ):
             if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
@@ -318,6 +324,11 @@ def when(ts: int | None) -> str:
 @app.template_filter("day")
 def day(ts: int | None) -> str:
     return time.strftime("%Y-%m-%d", time.localtime(ts)) if ts else ""
+
+
+@app.template_filter("size")
+def size_text(n: int) -> str:
+    return f"{n / 1048576:.1f} MB" if n >= 1048576 else f"{max(1, round(n / 1024))} KB"
 
 
 @app.template_filter("initials")
@@ -694,7 +705,8 @@ def card_facts(bid: int, where: str = "", args: tuple = ()) -> list:
         "SELECT c.*, col.done AS col_done,"
         " (SELECT COUNT(*) FROM subtasks s WHERE s.card_id = c.id) AS n_sub,"
         " (SELECT COUNT(*) FROM subtasks s WHERE s.card_id = c.id AND s.done) AS n_sub_done,"
-        " (SELECT COUNT(*) FROM comments m WHERE m.card_id = c.id) AS n_comments"
+        " (SELECT COUNT(*) FROM comments m WHERE m.card_id = c.id) AS n_comments,"
+        " (SELECT COUNT(*) FROM attachments a WHERE a.card_id = c.id) AS n_files"
         " FROM cards c JOIN columns col ON col.id = c.column_id"
         f" WHERE c.board_id = ? {where} ORDER BY c.pos",
         (bid, *args),
@@ -862,6 +874,9 @@ def card_panel(bid: int, cid: int) -> dict | None:
             "SELECT m.*, u.name, u.pic FROM comments m JOIN users u ON u.id = m.user_id"
             " WHERE card_id = ? ORDER BY m.id",
             (cid,),
+        ).fetchall(),
+        "files": con.execute(
+            "SELECT id, name, type, size FROM attachments WHERE card_id = ? ORDER BY id", (cid,)
         ).fetchall(),
         "author": con.execute("SELECT name FROM users WHERE id = ?", (c["created_by"],)).fetchone(),
     }
@@ -1198,6 +1213,12 @@ def edit_card(cid):
         con.execute("UPDATE cards SET title = ? WHERE id = ?", (f["title"].strip(), cid))
     if "body" in f:
         con.execute("UPDATE cards SET body = ? WHERE id = ?", (f["body"].strip(), cid))
+    if "covers" in f:  # the picture shown on the card; an unticked box shows none
+        pic = con.execute(
+            "SELECT id FROM attachments WHERE id = ? AND card_id = ? AND type LIKE 'image/%'",
+            (int_or_none(f.get("cover")), cid),
+        ).fetchone()
+        con.execute("UPDATE cards SET cover = ? WHERE id = ?", (pic and pic["id"], cid))
     if "due" in f:  # an empty box clears the date
         due = parse_day(f["due"])
         if due or not f["due"].strip():
@@ -1241,6 +1262,77 @@ def delete_card(cid):
     con.commit()
     flash(f"Deleted #{c['ref']} {c['title']}.")
     return redirect(url_for("board", bid=c["board_id"]))
+
+
+FILE_MAX = 20 * 1024 * 1024
+
+
+@app.route("/card/<int:cid>/files", methods=["POST"])
+def add_files(cid):
+    """Attach files to a card. A picture shows in the page; any other file downloads."""
+    c = get_card(cid)
+    con = db()
+    for file in request.files.getlist("file"):
+        name = (file.filename or "").replace("\\", "/").rsplit("/", 1)[-1]
+        name = re.sub(r"[\x00-\x1f\x7f]", "", name).strip()[-200:] or "file"
+        data = file.read(FILE_MAX + 1)
+        if len(data) > FILE_MAX:
+            flash(f"{name} is over 20 MB, so it was left out.")
+        elif data:
+            con.execute(
+                "INSERT INTO attachments (card_id, name, type, size, data, user_id, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    cid,
+                    name,
+                    picture_type(data) or "application/octet-stream",
+                    len(data),
+                    data,
+                    current_user()["id"],
+                    now(),
+                ),
+            )
+    bump(con, c["board_id"])
+    con.commit()
+    return back(c["board_id"])
+
+
+def get_attachment(aid: int) -> sqlite3.Row:
+    """A card's file, after checking that its board is the user's."""
+    row = (
+        db()
+        .execute(
+            "SELECT a.*, c.board_id FROM attachments a JOIN cards c ON c.id = a.card_id"
+            " WHERE a.id = ?",
+            (aid,),
+        )
+        .fetchone()
+    )
+    if row is None:
+        abort(404)
+    get_board(row["board_id"])
+    return row
+
+
+@app.route("/file/<int:aid>")
+def attachment(aid):
+    a = get_attachment(aid)
+    how = "inline" if a["type"].startswith("image/") else "attachment"
+    resp = Response(a["data"], mimetype=a["type"])
+    resp.headers["Content-Disposition"] = f"{how}; filename*=UTF-8''{quote(a['name'], safe='')}"
+    resp.headers["Cache-Control"] = "private, max-age=31536000, immutable"  # a file never changes
+    return resp
+
+
+@app.route("/file/<int:aid>/delete", methods=["POST"])
+def delete_file(aid):
+    a = get_attachment(aid)
+    con = db()
+    con.execute("UPDATE cards SET cover = NULL WHERE cover = ?", (aid,))
+    con.execute("DELETE FROM attachments WHERE id = ?", (aid,))
+    bump(con, a["board_id"])
+    con.commit()
+    return back(a["board_id"])
 
 
 @app.route("/card/<int:cid>/subtasks/new", methods=["POST"])

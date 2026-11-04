@@ -439,3 +439,36 @@ def test_a_new_card_opens_in_the_panel():
     page = xen.get(r.headers["Location"]).get_data(as_text=True)
     assert 'id="cardpanel"' in page and 'class="due"' in page
     assert 'class="menu new"' in page
+
+
+PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+    "1f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a6e50000000049454e44ae426082"
+)
+
+
+def test_files_on_a_card_and_the_picture_it_shows():
+    yan, _ = user("yan@example.com", "Yan Files", admin=True)
+    _wid, bid = workspace_with_board(yan)
+    col = q("SELECT id FROM columns WHERE board_id = ? ORDER BY pos", bid)[0][0]
+    post(yan, f"/b/{bid}/cards/new", title="Shots", column=col)
+    cid = q("SELECT id FROM cards WHERE board_id = ? AND title = 'Shots'", bid)[0][0]
+    page = (BytesIO(b"<script>alert(1)</script>"), "notes.html")
+    post(yan, f"/card/{cid}/files", file=[(BytesIO(PNG), "shot.png"), page])
+    pic, doc = [r[0] for r in q("SELECT id FROM attachments WHERE card_id = ? ORDER BY id", cid)]
+    r = yan.get(f"/file/{pic}")
+    assert r.mimetype == "image/png" and r.headers["Content-Disposition"].startswith("inline")
+    r = yan.get(f"/file/{doc}")  # a web page someone attached downloads; it never runs here
+    assert r.mimetype == "application/octet-stream"
+    assert r.headers["Content-Disposition"] == "attachment; filename*=UTF-8''notes.html"
+    post(yan, f"/card/{cid}/edit", covers="1", cover=str(doc))  # not a picture
+    assert q("SELECT cover FROM cards WHERE id = ?", cid)[0][0] is None
+    post(yan, f"/card/{cid}/edit", covers="1", cover=str(pic))
+    board = yan.get(f"/b/{bid}").get_data(as_text=True)
+    assert f'class="cover" src="/file/{pic}"' in board and "📎 2" in board
+    zed, _ = user("zed@example.com", "Zed Outside")
+    assert zed.get(f"/file/{pic}").status_code == 404
+    post(yan, f"/file/{pic}/delete")
+    assert q("SELECT cover FROM cards WHERE id = ?", cid)[0][0] is None
+    post(yan, f"/card/{cid}/delete")
+    assert q("SELECT COUNT(*) FROM attachments WHERE card_id = ?", cid)[0][0] == 0

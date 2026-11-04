@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 (2026-11-04)
+
+- Files on cards: add any number of files in the card panel, up to 20 MB each. A picture
+  opens in the browser; any other file downloads.
+- Tick "On the card" next to a picture to show it at the top of the card on the board. One
+  picture at a time; ticking another moves it.
+- A card with files shows 📎 and how many.
+
 ## 0.6.1 (2026-11-04)
 
 - The due date box takes a typed date again (2026-11-14, 14.11.2026 or 14.11). A click on

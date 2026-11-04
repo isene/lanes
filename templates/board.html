@@ -7,6 +7,7 @@
 
 {% macro tile(c) %}
 <a class="tile" id="c{{ c.id }}" data-card="{{ c.id }}" href="{{ view(card=c.id) }}">
+  {% if c.cover %}<img class="cover" src="{{ url_for('attachment', aid=c.cover) }}" alt="" loading="lazy">{% endif %}
   <span class="title"><span class="ref">#{{ c.ref }}</span> {{ c.title }}</span>
   {% if c.labels %}<span class="labels">{% for l in c.labels %}<span class="label lab-{{ l.id }}">{{ l.name }}</span>{% endfor %}</span>{% endif %}
   {% if c.open_subs %}<span class="subs">
@@ -15,11 +16,12 @@
     {% endfor %}
     {% if c.open_subs|length > 5 %}<span class="small">and {{ c.open_subs|length - 5 }} more</span>{% endif %}
   </span>{% endif %}
-  {% if c.people or c.n_sub or c.n_comments or c.due %}
+  {% if c.people or c.n_sub or c.n_comments or c.n_files or c.due %}
   <span class="facts">
     {% if c.due %}<span class="due{{ ' late' if c.late }}" title="{{ 'Past its date' if c.late else 'Due' }}">{{ c.due }}</span>{% endif %}
     {% if c.n_sub %}<span class="progress" title="{{ c.n_sub_done }} of {{ c.n_sub }} sub-tasks done"><progress value="{{ c.n_sub_done }}" max="{{ c.n_sub }}"></progress>{{ c.n_sub_done }}/{{ c.n_sub }}</span>{% endif %}
     {% if c.n_comments %}<span title="Comments">💬 {{ c.n_comments }}</span>{% endif %}
+    {% if c.n_files %}<span title="Files">📎 {{ c.n_files }}</span>{% endif %}
     <span class="people">{% for p in c.people %}{{ avatar(p.id, p.name, p.pic, 'xs') }}{% endfor %}</span>
   </span>
   {% endif %}
@@ -229,6 +231,26 @@
     <ul class="sublist">{% for s in done_subs %}{{ sub(s) }}{% endfor %}</ul></details>{% endif %}
   <form method="post" action="{{ url_for('new_subtask', cid=c.id) }}" class="row tight">
     {{ hidden() }}<input name="title" class="grow" placeholder="New sub-task" required><button>Add</button>
+  </form>
+
+  <h3>Files</h3>
+  <ul class="files">
+    {% for a in oc.files %}{% set pic = a.type.startswith('image/') %}
+    <li>
+      <a href="{{ url_for('attachment', aid=a.id) }}"{% if pic %} target="_blank"{% endif %}>
+        {% if pic %}<img src="{{ url_for('attachment', aid=a.id) }}" alt="" loading="lazy">{% endif %}{{ a.name }}</a>
+      <span class="small">{{ a.size|size }}</span>
+      {% if pic %}<form method="post" action="{{ url_for('edit_card', cid=c.id) }}" data-autosubmit>
+        {{ hidden() }}<input type="hidden" name="covers" value="1">
+        <label class="check" title="Show this picture on the card"><input type="checkbox" name="cover" value="{{ a.id }}"{{ ' checked' if a.id == c.cover }}>On the card</label>
+        <button class="nojs">Save</button>
+      </form>{% endif %}
+      <form method="post" action="{{ url_for('delete_file', aid=a.id) }}">{{ hidden() }}<button class="link x" title="Delete the file">×</button></form>
+    </li>
+    {% endfor %}
+  </ul>
+  <form method="post" action="{{ url_for('add_files', cid=c.id) }}" enctype="multipart/form-data" class="row tight" data-autosubmit>
+    {{ hidden() }}<input type="file" name="file" multiple aria-label="Add files" class="grow"><button class="nojs">Upload</button>
   </form>
 
   <h3>Comments</h3>

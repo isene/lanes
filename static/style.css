@@ -291,3 +291,12 @@ label.due { position: relative; }
 .cal button:hover { background: var(--soft); filter: none; }
 .cal button.today { color: var(--accent); font-weight: 700; }
 .cal button.on { background: var(--accent); color: #fff; }
+
+/* Files on a card, and the picture a card shows */
+.tile .cover { display: block; width: 100%; max-height: 180px; object-fit: cover; border-radius: 6px; }
+.files { list-style: none; padding: 0; margin: 4px 0; }
+.files li { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.files li > a { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.files img { width: 48px; height: 36px; object-fit: cover; border-radius: 4px; flex: none; }
+.files form { margin: 0; }
+.files label.check { margin: 0; font-size: 13px; white-space: nowrap; }
