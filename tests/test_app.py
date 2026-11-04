@@ -425,3 +425,17 @@ def test_password_forms_name_the_account_for_password_managers():
     assert (
         'value="wes@example.com" readonly autocomplete="username"' in wes.get("/me").data.decode()
     )
+
+
+def test_a_new_card_opens_in_the_panel_with_a_date_box():
+    xen, _ = user("xen@example.com", "Xen New", admin=True)
+    _wid, bid = workspace_with_board(xen)
+    col = q("SELECT id FROM columns WHERE board_id = ? ORDER BY pos", bid)[0][0]
+    r = post(
+        xen, f"/b/{bid}/cards/new", title="Plan", column=col, next=f"/b/{bid}?by=person&card=1"
+    )
+    cid = q("SELECT id FROM cards WHERE board_id = ? AND title = 'Plan'", bid)[0][0]
+    assert r.headers["Location"].endswith(f"/b/{bid}?by=person&card={cid}")
+    page = xen.get(r.headers["Location"]).get_data(as_text=True)
+    assert 'id="cardpanel"' in page and 'type="date" name="due"' in page
+    assert 'class="menu new"' in page

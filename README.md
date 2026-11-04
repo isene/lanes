@@ -48,6 +48,8 @@ Enough to move one team off Taiga.
 - `app.py overdue WORKSPACE-ID` prints the late cards by person, ready to post to a chat.
 - A profile page for name, picture, password, and light or dark colours.
 - A workspace logo at the top left that leads back to the last board you opened.
+- New in the bar (or the n key) makes a card, and a new card opens in the card
+  panel, ready for people, labels and a due date picked from a calendar.
 - Drag cards between columns and lanes with the mouse. On a phone, the
   card panel moves them.
 - Import a Taiga project export. Taiga's statuses become columns, its

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 (2026-11-04)
+
+- A new card opens in the card panel at once, so its people, labels and date can be set
+  without a click on it first.
+- A New button in the bar makes a card in the first column and lane. The n key opens it.
+- The due date is picked from a calendar. Typing a date still works.
+
 ## 0.5.4 (2026-11-03)
 
 - Moving a card no longer throws the board back to the top in Safari and other WebKit

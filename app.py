@@ -16,7 +16,7 @@ import time
 from contextlib import closing
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import quote, urlencode
+from urllib.parse import parse_qsl, quote, urlencode
 
 import segno
 from flask import (
@@ -35,7 +35,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.5.4"
+__version__ = "0.6.0"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -476,12 +476,16 @@ def get_part(table: str, pid: int) -> sqlite3.Row:
     return row
 
 
-def back(bid: int):
-    """Go back to the board view the form came from, or to the plain board."""
+def back(bid: int, card: int | None = None):
+    """Go back to the board view the form came from, or to the plain board, with a card open."""
     nxt = request.form.get("next", "")
-    if re.match(rf"/b/{bid}(\?|$|/archive)", nxt):
-        return redirect(nxt)
-    return redirect(url_for("board", bid=bid))
+    if not re.match(rf"/b/{bid}(\?|$|/archive)", nxt):
+        nxt = url_for("board", bid=bid)
+    if card:
+        path, _, query = nxt.partition("?")
+        args = [(k, v) for k, v in parse_qsl(query) if k != "card"]
+        nxt = path + "?" + urlencode(args + [("card", card)])
+    return redirect(nxt)
 
 
 def int_or_none(value) -> int | None:
@@ -1126,7 +1130,7 @@ def new_card(bid):
         add_label(con, bid, cid, int(row))
     bump(con, bid)
     con.commit()
-    return back(bid)
+    return back(bid, cid)  # open the new card, to add people, labels and a date
 
 
 def add_person(con: sqlite3.Connection, bid: int, cid: int, uid: int) -> None:

@@ -47,6 +47,8 @@ document.addEventListener("click", (e) => e.target.closest("a") && saveScroll())
 
 // Forms that save as soon as a box is ticked or a choice is made.
 document.addEventListener("change", (e) => {
+  // Typing a year gives 0002, 0020 and 0202 on the way to 2026, so wait for the whole year.
+  if (e.target.type === "date" && e.target.value.startsWith("0")) return;
   const form = e.target.closest("form[data-autosubmit], form.rename");
   if (form) form.requestSubmit();
 });
@@ -188,6 +190,11 @@ function dropColumn(head, target, e) {
   post(`/column/${head.dataset.col}/move`, { before: before ? before.dataset.col : "" });
 }
 
+// The New menu in the bar: its box is ready to type in when it opens.
+const newMenu = document.querySelector("details.new");
+const newTitle = newMenu?.querySelector("input[name=title]");
+newMenu?.addEventListener("toggle", () => newMenu.open && newTitle.focus());
+
 // Keys: n for a new card, / to search, Esc to close the card or leave a field.
 document.addEventListener("keydown", (e) => {
   const typing = e.target.closest("input, textarea, select");
@@ -195,13 +202,15 @@ document.addEventListener("keydown", (e) => {
     if (typing) {
       if (e.target.form?.matches(".rename")) e.target.value = e.target.defaultValue;
       e.target.blur();
+      e.target.closest("details.menu")?.removeAttribute("open");
     }
     else document.querySelector("#cardpanel .close")?.click();
     return;
   }
   if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.key === "n") {
-    document.querySelector(".cells:not(.folded) .cell:not(.folded) .addcard input[name=title]")?.focus();
+  if (e.key === "n" && newMenu) {
+    newMenu.open = true;
+    newTitle.focus(); // now, or the first letter typed after n is lost
     e.preventDefault();
   } else if (e.key === "/") {
     document.querySelector(".search input[name=q]")?.focus();

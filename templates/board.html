@@ -29,6 +29,16 @@
 {% block body %}
 <div class="bar">
   <h1>{{ b.name }}</h1>
+  <details class="menu new">
+    <summary>New</summary>
+    <div class="drop">
+      <form method="post" action="{{ url_for('new_card', bid=b.id) }}">
+        {{ hidden() }}<input type="hidden" name="column" value="{{ cols[0].id }}">
+        <input type="hidden" name="lane" value="{{ lanes[0].id if lanes else '' }}">
+        <input name="title" placeholder="Title of the new card" aria-label="New card" required>
+      </form>
+    </div>
+  </details>
   <nav class="views" aria-label="Rows">
     <a class="{{ 'on' if by == '' }}" href="{{ view(by=None) }}">Lanes</a>
     <a class="{{ 'on' if by == 'person' }}" href="{{ view(by='person') }}">People</a>
@@ -167,7 +177,7 @@
     {{ hidden() }}
     <label>Column <select name="column">{% for col in cols %}<option value="{{ col.id }}"{{ ' selected' if col.id == c.column_id }}>{{ col.name }}</option>{% endfor %}</select></label>
     {% if lanes %}<label>Lane <select name="lane">{% for ln in lanes %}<option value="{{ ln.id }}"{{ ' selected' if ln.id == c.lane_id }}>{{ ln.name }}</option>{% endfor %}</select></label>{% endif %}
-    <label>Due <input name="due" value="{{ c.due or '' }}" placeholder="2026-11-14" title="2026-11-14, 14.11.2026 or 14.11"></label>
+    <label>Due <input type="date" name="due" value="{{ c.due or '' }}" placeholder="2026-11-14"></label>
     <button class="nojs">Move</button>
   </form>
 
