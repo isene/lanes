@@ -108,6 +108,9 @@ docker build -t lanes .
 docker run -p 8080:8080 -v lanes-data:/data -e LANES_SECRET=... -e LANES_URL=https://lanes.example.com lanes
 ```
 
+In Kubernetes, a Service named `lanes` sets `LANES_PORT` to `tcp://...` in the pod and lanes
+fails to start. Set `enableServiceLinks: false` in the pod spec.
+
 ## Server
 
 First setup, as the app's own user, on a server with Apache and certbot:
