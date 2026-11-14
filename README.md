@@ -46,6 +46,8 @@ Enough to move one team off Taiga.
   files and comments. One attached picture can show on the card. A card past its date turns red, and a red dot on each person's picture
   counts their late cards.
 - `app.py overdue WORKSPACE-ID` prints the late cards by person, ready to post to a chat.
+- `app.py move WORKSPACE-ID URL` marks a workspace as moved to another lanes server. Its
+  people get a page with the new link and can no longer log in here. An empty URL undoes it.
 - A profile page for name, picture, password, and light or dark colours.
 - A workspace logo at the top left that leads back to the last board you opened.
 - New in the bar (or the n key) makes a card, and a new card opens in the card
@@ -93,8 +95,18 @@ They go in `.env` next to `app.py`.
 |-----|---------|
 | `LANES_SECRET` | Long random string that signs the login cookie |
 | `LANES_URL` | The public address, used in invite links |
-| `LANES_PORT` | Port on 127.0.0.1, 8092 by default |
+| `LANES_PORT` | Port, 8092 by default |
+| `LANES_HOST` | Address to listen on, 127.0.0.1 by default |
 | `LANES_DATA` | Folder for the database, `data/` by default |
+
+## Container
+
+The `Dockerfile` runs lanes as user 10000 on port 8080, with the database in `/data`:
+
+```sh
+docker build -t lanes .
+docker run -p 8080:8080 -v lanes-data:/data -e LANES_SECRET=... -e LANES_URL=https://lanes.example.com lanes
+```
 
 ## Server
 

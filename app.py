@@ -35,7 +35,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -185,6 +185,7 @@ def init_db() -> None:
             ("workspaces", "logo", "INTEGER NOT NULL DEFAULT 0"),
             ("cards", "due", "TEXT"),
             ("cards", "cover", "INTEGER"),  # the attached picture shown on the card
+            ("workspaces", "moved_to", "TEXT NOT NULL DEFAULT ''"),  # the new address after a move
         ):
             if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
@@ -273,7 +274,37 @@ def guard():
             abort(400)
     if request.endpoint not in ("login", "invite", "static") and not current_user():
         return redirect(url_for("login"))
+    where = current_user() and moved_to()
+    if where:
+        if not current_user()["is_admin"]:
+            session.clear()  # a team that moved logs in at the new place only
+            g.user = None
+        link = where + request.full_path.rstrip("?") if request.method == "GET" else where
+        return render_template("moved.html", link=link)
     return None
+
+
+def moved_to() -> str:
+    """The new address of the workspace this request is about, or "" when it has not moved."""
+    con, me, args = db(), current_user(), request.view_args or {}
+    if "wid" in args:
+        rows = con.execute("SELECT moved_to FROM workspaces WHERE id = ?", (args["wid"],))
+    elif "bid" in args:
+        rows = con.execute(
+            "SELECT w.moved_to FROM boards b JOIN workspaces w ON w.id = b.workspace_id"
+            " WHERE b.id = ?",
+            (args["bid"],),
+        )
+    elif me["is_admin"]:
+        return ""
+    else:  # someone whose every workspace has moved has nothing left here
+        rows = con.execute(
+            "SELECT w.moved_to FROM members m JOIN workspaces w ON w.id = m.workspace_id"
+            " WHERE m.user_id = ?",
+            (me["id"],),
+        )
+    found = [r[0] for r in rows.fetchall()]
+    return found[0] if found and all(found) else ""
 
 
 @app.after_request
@@ -1740,12 +1771,23 @@ def main(args: list) -> None:
     elif args[:1] == ["overdue"] and len(args) == 2:
         with closing(connect()) as con:
             print(overdue(con, int(args[1])))
+    elif args[:1] == ["move"] and len(args) == 3:
+        with closing(connect()) as con:
+            con.execute(
+                "UPDATE workspaces SET moved_to = ? WHERE id = ?",
+                (args[2].rstrip("/"), int(args[1])),
+            )
+            con.commit()
     elif not args:
         from waitress import serve
 
-        serve(app, host="127.0.0.1", port=int(os.environ.get("LANES_PORT", "8092")), threads=8)
+        host = os.environ.get("LANES_HOST", "127.0.0.1")
+        serve(app, host=host, port=int(os.environ.get("LANES_PORT", "8092")), threads=8)
     else:
-        print("usage: app.py [adduser EMAIL NAME [--admin] | invite EMAIL | overdue WORKSPACE-ID]")
+        print(
+            "usage: app.py [adduser EMAIL NAME [--admin] | invite EMAIL | overdue WORKSPACE-ID"
+            " | move WORKSPACE-ID URL]"
+        )
 
 
 if __name__ == "__main__":

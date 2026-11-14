@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0 (2026-11-14)
+
+- `app.py move WORKSPACE-ID URL` marks a workspace as moved to another lanes server. Its
+  people get a page with the link to the new place, and their logins here stop. An admin
+  can still log in to set up other teams.
+- A `Dockerfile`, and `LANES_HOST` to listen on another address than 127.0.0.1.
+
 ## 0.7.0 (2026-11-04)
 
 - Files on cards: add any number of files in the card panel, up to 20 MB each. A picture

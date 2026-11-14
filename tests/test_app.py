@@ -472,3 +472,20 @@ def test_files_on_a_card_and_the_picture_it_shows():
     assert q("SELECT cover FROM cards WHERE id = ?", cid)[0][0] is None
     post(yan, f"/card/{cid}/delete")
     assert q("SELECT COUNT(*) FROM attachments WHERE card_id = ?", cid)[0][0] == 0
+
+
+def test_a_moved_workspace_sends_its_team_to_the_new_place():
+    al, _ = user("al@example.com", "Al", admin=True)
+    bo, _ = user("bo@example.com", "Bo")
+    wid, bid = workspace_with_board(al, "Moving team")
+    post(al, f"/w/{wid}/invite", name="Bo", email="bo@example.com")
+    assert bo.get(f"/b/{bid}").status_code == 200
+    lanes.main(["move", str(wid), "https://new.example.com/"])
+    r = bo.get(f"/b/{bid}?card=3")
+    assert b'href="https://new.example.com/b/%d?card=3"' % bid in r.data
+    assert b"Log out" not in r.data
+    assert bo.get("/").headers["Location"].endswith("/login")  # the move logged Bo out
+    assert b"has moved" in al.get(f"/w/{wid}").data
+    assert b"New workspace" in al.get("/").data  # the admin stays, to set up other teams
+    lanes.main(["move", str(wid), ""])
+    assert al.get(f"/b/{bid}").status_code == 200

@@ -4,6 +4,9 @@
 {% for w in spaces %}
 <section class="panel space">
   <h2><a href="{{ url_for('workspace', wid=w.id) }}">{{ w.name }}</a></h2>
+  {% if w.moved_to %}
+  <p>Moved to <a href="{{ w.moved_to }}">{{ w.moved_to }}</a></p>
+  {% else %}
   <div class="tiles">
     {% for b in boards[w.id] %}<a class="boardlink" href="{{ url_for('board', bid=b.id) }}">{{ b.name }}</a>{% endfor %}
     <form method="post" action="{{ url_for('new_board', wid=w.id) }}" class="row addboard">
@@ -12,6 +15,7 @@
       <button>Add</button>
     </form>
   </div>
+  {% endif %}
 </section>
 {% else %}
 <p>You are not in any workspace yet. Ask someone in a workspace to invite you.</p>
