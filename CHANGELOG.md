@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1 (2026-11-14)
+
+- Ticking a box, picking a column, lane or date, or typing in a field saves without reloading
+  the page. The board behind the card panel updates in place, and the panel stays open where
+  it was. So does the colour choice on the profile page. A file upload still reloads.
+
 ## 0.8.0 (2026-11-14)
 
 - `app.py move WORKSPACE-ID URL` marks a workspace as moved to another lanes server. Its

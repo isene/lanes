@@ -1,5 +1,5 @@
-// The board's small helpers: drag cards and columns, fold columns and lanes, keys, and a
-// reload when the tab comes back after someone changed the board. Every helper waits for
+// The board's small helpers: save changes without a page reload, drag cards and columns, fold
+// columns and lanes, keys, and a reload when the tab comes back after someone changed the board. Every helper waits for
 // an event; nothing runs on a timer. Without this script, forms and links still do it all.
 document.documentElement.classList.add("js");
 const board = document.getElementById("board");
@@ -45,29 +45,67 @@ if (board.scrollTop !== scrollY) addEventListener("load", restoreScroll, { once:
 document.addEventListener("submit", saveScroll);
 document.addEventListener("click", (e) => e.target.closest("a") && saveScroll());
 
-// Forms that save as soon as a box is ticked or a choice is made.
+// Forms that save as soon as a box is ticked, a choice is made or a field is left. They save
+// in the background: the page stays where it is, and the board behind the card panel is
+// swapped for the server's new copy. A file still reloads, so it shows in the panel.
+const QUIET = "form[data-autosubmit]:not([enctype='multipart/form-data']), form.rename";
+let saving = Promise.resolve(); // one save after the other, so the last answer is the newest
+
+function quietSave(form) {
+  const body = new FormData(form);
+  const sent = new URLSearchParams(body).toString();
+  if (form.dataset.sent === sent) return; // Enter and the change it causes send it once
+  form.dataset.sent = sent;
+  saving = saving.then(async () => {
+    try {
+      const answer = await fetch(form.action, { method: "POST", body });
+      if (!answer.ok || new URL(answer.url).pathname === "/login") throw new Error(answer.status);
+      const page = new DOMParser().parseFromString(await answer.text(), "text/html");
+      const fresh = page.getElementById("board");
+      const [left, top] = [board.scrollLeft, board.scrollTop];
+      board.replaceChildren(...fresh.childNodes);
+      board.dataset.version = fresh.dataset.version;
+      setupBoard();
+      [board.scrollLeft, board.scrollTop] = [left, top];
+      const freshDue = page.querySelector("#cardpanel input[name=due]");
+      if (due && freshDue && document.activeElement !== due) due.value = freshDue.value; // 14.11 -> 2026-11-14
+    } catch (e) {
+      form.submit(); // the old way: the server's page, with whatever it says
+    }
+  });
+}
+
 document.addEventListener("change", (e) => {
   const form = e.target.closest("form[data-autosubmit], form.rename");
-  if (form) form.requestSubmit();
+  if (!form) return;
+  if (form.matches(QUIET)) quietSave(form);
+  else form.requestSubmit();
+});
+document.addEventListener("submit", (e) => {
+  if (!e.target.matches(QUIET) || (e.submitter && e.submitter.name)) return;
+  e.preventDefault(); // Enter in a field saves it the same way
+  quietSave(e.target);
 });
 
 // Column and lane names show as plain text, so a slip of the finger or a password manager
 // cannot change them. A click turns a name into a box; Enter or a click elsewhere saves it,
 // and Esc puts the old name back.
-for (const input of board.querySelectorAll("form.rename input[name=name]")) {
-  const name = document.createElement("button");
-  name.type = "button";
-  name.className = "name";
-  name.title = "Click to rename";
-  name.textContent = input.value;
-  input.replaceWith(name);
-  name.addEventListener("click", () => {
-    name.replaceWith(input);
-    input.focus();
-    input.select();
-  });
-  // A changed name is being saved, and the page reloads with it.
-  input.addEventListener("blur", () => input.value === input.defaultValue && input.replaceWith(name));
+function setupNames() {
+  for (const input of board.querySelectorAll("form.rename input[name=name]")) {
+    const name = document.createElement("button");
+    name.type = "button";
+    name.className = "name";
+    name.title = "Click to rename";
+    name.textContent = input.value;
+    input.replaceWith(name);
+    name.addEventListener("click", () => {
+      name.replaceWith(input);
+      input.focus();
+      input.select();
+    });
+    // A changed name is being saved; the board comes back with it.
+    input.addEventListener("blur", () => input.value === input.defaultValue && input.replaceWith(name));
+  }
 }
 
 // Folding: each person's own choice, kept in this browser.
@@ -97,12 +135,18 @@ board.addEventListener("click", (e) => {
   } catch (e) {}
   showFolds();
 });
-showFolds();
+
+// What the board's own parts need, at the start and after a background save swaps them.
+function setupBoard() {
+  setupNames();
+  showFolds();
+  for (const el of board.querySelectorAll(".tile, .tile *")) el.draggable = false;
+}
+setupBoard();
 
 // Dragging with pointer events, since some browsers have no desktop drag support.
 // Touch is left alone, so a finger still scrolls; the card panel moves cards there.
 let drag = null;
-for (const el of board.querySelectorAll(".tile, .tile *")) el.draggable = false;
 
 function under(e, selector) {
   const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -238,7 +282,7 @@ if (due) {
     } else {
       due.value = button.dataset.day;
       cal.hidden = true;
-      due.form.requestSubmit();
+      quietSave(due.form);
     }
   });
 }
