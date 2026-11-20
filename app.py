@@ -12,9 +12,11 @@ import secrets
 import sqlite3
 import struct
 import sys
+import threading
 import time
+import urllib.request
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qsl, quote, urlencode
 
@@ -1757,6 +1759,45 @@ def overdue(con: sqlite3.Connection, wid: int) -> str:
     return "Cards past their date:\n" + "\n".join(lines) if lines else ""
 
 
+def next_post(hour: int, now: float | None = None) -> float:
+    """Seconds from now until the next weekday at hour:00, local time."""
+    now = time.time() if now is None else now
+    t = datetime.fromtimestamp(now)  # noqa: DTZ006 - local time on purpose: TZ sets the hour
+    nxt = t.replace(hour=hour, minute=0, second=0, microsecond=0)
+    while nxt <= t or nxt.weekday() > 4:
+        nxt += timedelta(days=1)
+    return time.mktime(nxt.timetuple()) - now
+
+
+def post_to_webhook(url: str, secret: str, text: str) -> None:
+    body = json.dumps({"schema": "generic.message.v1", "text": text}).encode()
+    headers = {"Authorization": f"Bearer {secret}", "Content-Type": "application/json"}
+    urllib.request.urlopen(urllib.request.Request(url, body, headers), timeout=30).close()
+
+
+def start_overdue_poster() -> None:
+    """Post one workspace's late cards to a chat webhook on weekday mornings. Off unless LANES_WEBHOOK_URL is set."""
+    url = os.environ.get("LANES_WEBHOOK_URL")
+    if not url:
+        return
+    secret = os.environ.get("LANES_WEBHOOK_SECRET", "")
+    wid = int(os.environ.get("LANES_WEBHOOK_WORKSPACE", "1"))
+    hour = int(os.environ.get("LANES_WEBHOOK_HOUR", "9"))
+
+    def run() -> None:
+        while True:
+            time.sleep(next_post(hour))
+            try:
+                with closing(connect()) as con:
+                    text = overdue(con, wid)
+                if text:
+                    post_to_webhook(url, secret, text)
+            except Exception as e:  # noqa: BLE001 - one failed post must not stop the next one
+                print(f"overdue post failed: {e}", file=sys.stderr)
+
+    threading.Thread(target=run, daemon=True).start()
+
+
 def main(args: list) -> None:
     init_db()
     if args[:1] == ["adduser"] and len(args) >= 3:
@@ -1781,6 +1822,7 @@ def main(args: list) -> None:
     elif not args:
         from waitress import serve
 
+        start_overdue_poster()
         host = os.environ.get("LANES_HOST", "127.0.0.1")
         serve(app, host=host, port=int(os.environ.get("LANES_PORT", "8092")), threads=8)
     else:

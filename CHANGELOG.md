@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0 (2026-11-20)
+
+- lanes posts the late cards of a workspace to a chat webhook at 09:00 on weekdays, from the
+  server itself. It is off unless `LANES_WEBHOOK_URL` is set, and posts nothing on a day with no
+  late cards.
+
 ## 0.8.1 (2026-11-14)
 
 - Ticking a box, picking a column, lane or date, or typing in a field saves without reloading

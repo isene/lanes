@@ -46,6 +46,9 @@ Enough to move one team off Taiga.
   files and comments. One attached picture can show on the card. A card past its date turns red, and a red dot on each person's picture
   counts their late cards.
 - `app.py overdue WORKSPACE-ID` prints the late cards by person, ready to post to a chat.
+- With `LANES_WEBHOOK_URL` and `LANES_WEBHOOK_SECRET` set, lanes posts that list to a chat
+  webhook at 09:00 on weekdays (local time; set `TZ`). `LANES_WEBHOOK_HOUR` moves the hour and
+  `LANES_WEBHOOK_WORKSPACE` picks the workspace (default 1). A day with no late cards posts nothing.
 - `app.py move WORKSPACE-ID URL` marks a workspace as moved to another lanes server. Its
   people get a page with the new link and can no longer log in here. An empty URL undoes it.
 - A profile page for name, picture, password, and light or dark colours.

@@ -489,3 +489,37 @@ def test_a_moved_workspace_sends_its_team_to_the_new_place():
     assert b"New workspace" in al.get("/").data  # the admin stays, to set up other teams
     lanes.main(["move", str(wid), ""])
     assert al.get(f"/b/{bid}").status_code == 200
+
+
+def at(text):
+    """A local time, such as 2026-11-20 10:00, as seconds since 1970."""
+    return lanes.time.mktime(lanes.datetime.strptime(text, "%Y-%m-%d %H:%M").timetuple())
+
+
+def test_the_morning_post_skips_the_weekend():
+    assert lanes.next_post(9, at("2026-11-20 10:00")) == at("2026-11-23 09:00") - at("2026-11-20 10:00")
+    assert lanes.next_post(9, at("2026-11-23 08:00")) == 3600
+
+
+def test_the_morning_post_is_off_without_a_webhook(monkeypatch):
+    monkeypatch.delenv("LANES_WEBHOOK_URL", raising=False)
+    before = lanes.threading.active_count()
+    lanes.start_overdue_poster()
+    assert lanes.threading.active_count() == before
+
+
+def test_the_webhook_gets_the_text_and_the_secret(monkeypatch):
+    sent = {}
+
+    class Answer:
+        def close(self):
+            pass
+
+    def urlopen(req, timeout):
+        sent.update(url=req.full_url, auth=req.get_header("Authorization"), body=json.loads(req.data))
+        return Answer()
+
+    monkeypatch.setattr(lanes.urllib.request, "urlopen", urlopen)
+    lanes.post_to_webhook("https://chat.example/hook", "s3", "Cards past their date:")
+    assert sent == {"url": "https://chat.example/hook", "auth": "Bearer s3",
+                    "body": {"schema": "generic.message.v1", "text": "Cards past their date:"}}
