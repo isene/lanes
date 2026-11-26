@@ -37,7 +37,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.13.0"
+__version__ = "0.14.0"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -381,7 +381,11 @@ def template_values():
     if "csrf" not in session:
         session["csrf"] = secrets.token_urlsafe(32)
     me = current_user()
+    host = request.environ.get("lanes.user") or {}
+    colour, emblem = str(host.get("colour") or ""), str(host.get("emblem") or "")
     return {
+        "host_colour": colour if re.fullmatch(r"#[0-9a-fA-F]{6}", colour) else "",
+        "host_emblem": emblem if emblem.startswith("/") and not emblem.startswith("//") else "",
         "csrf": session["csrf"],
         "me": me,
         "now": now(),

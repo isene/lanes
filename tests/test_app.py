@@ -666,6 +666,7 @@ def test_a_program_around_lanes_hands_over_the_login_and_the_address(monkeypatch
     lanes.init_db()
     ada = {"mail": "Ada@Host.example", "name": "Ada Host", "chief": True, "workspace": "Village"}
     ben = {"mail": "ben@host.example", "name": "Ben Host", "home": "/", "home_name": "Town hall"}
+    ben.update(colour="#7a43b0", emblem="/emblem?v=1")  # the look of the site around lanes
 
     def visitor(who):
         client = lanes.app.test_client()
@@ -688,6 +689,15 @@ def test_a_program_around_lanes_hands_over_the_login_and_the_address(monkeypatch
     assert r.headers["Location"] == f"/board/b/{bid}"
     page = b.get(**at(f"/b/{bid}")).data.decode()  # Ben is a member without an invite
     assert f'data-check="/board/b/{bid}/version"' in page and ">Town hall</a>" in page
+    assert 'style="--village: #7a43b0"' in page and 'src="/emblem?v=1"' in page
+    plain = (
+        visitor({**ben, "colour": "red; x", "emblem": "//elsewhere.example/x.svg"})
+        .get(**at("/"))
+        .data.decode()
+    )
+    assert (
+        "--village" not in plain and "elsewhere" not in plain and "logo.svg" in plain
+    )  # only safe values
     assert f'name="next" value="/board/b/{bid}"' in page
     rows = q(
         "SELECT u.email, m.chief, u.pw_hash FROM users u JOIN members m ON m.user_id = u.id"

@@ -121,6 +121,8 @@ environ["lanes.user"] = {
     "chief": True,            # may tidy the workspace
     "workspace": "Team",      # the name of the one workspace, made at the first visit
     "home": "/", "home_name": "Intranet",  # the link back, where lanes has "Log out"
+    "colour": "#7a43b0",      # optional: tints the top bar, unless the workspace has a colour
+    "emblem": "/emblem",      # optional: a picture on the same site, in place of the lanes logo
 }
 ```
 

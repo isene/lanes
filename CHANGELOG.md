@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.14.0 (2026-11-26)
+
+- A program that has lanes mounted can hand over a colour and an emblem, so the board looks like
+  the site around it. The colour tints the top bar; the emblem takes the place of the lanes logo.
+
 ## 0.13.0 (2026-11-26)
 
 - `app.py export WORKSPACE-ID FILE` writes one workspace to a new database that a fresh lanes
