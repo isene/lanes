@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.0 (2026-11-26)
+
+- A workspace can be linked to a town: another program, such as a company's help desk. A card
+  then has "Send to" the town. The card shows the town's state and comments, and the team can
+  write back. The town can also send tasks down as new cards. The admin page sets it up; the
+  README has the calls.
+
 ## 0.11.0 (2026-11-26)
 
 - Another program can have lanes inside it, under an address such as `/board`. That program

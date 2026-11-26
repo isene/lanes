@@ -126,6 +126,23 @@ member of the one workspace. A browser cannot set that key, since what it sends 
 `HTTP_...`. Give lanes a session cookie of its own (`SESSION_COOKIE_NAME`, `SESSION_COOKIE_PATH`),
 or it overwrites the cookie of the program around it.
 
+## A town
+
+A workspace can send cards to another program, here called the town, such as a
+company's help desk. The admin page links a workspace to a town: its name, its
+address and the key it gave. "Save and make a key for the town" shows, once, the
+address and key the town calls back with.
+
+- Up: "Send to <town>" in a card posts `{ref, title, body}` to `<town>/api/tickets`
+  with `Authorization: Bearer <the town's key>`. The ref is `card-<id>`.
+- Writing to the town about a sent card posts `{comment}` to `<town>/api/tickets/<ref>`.
+- Back: the town posts `{event, ticket, changes}` to `/api/town/<workspace id>` with
+  the key lanes gave. The card shows the ticket's state and the town's comments.
+- Down: the town posts `{ref, title, body, url}` to the same address. lanes makes a
+  card in the first column of the workspace's first board, once per ref.
+
+Comments on the card itself stay in the team. A failed call is not tried again.
+
 ## Container
 
 The `Dockerfile` runs lanes as user 10000 on port 8080, with the database in `/data`:

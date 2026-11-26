@@ -253,6 +253,25 @@
     {{ hidden() }}<input type="file" name="file" multiple aria-label="Add files" class="grow"><button class="nojs">Upload</button>
   </form>
 
+  {% if w.town_url %}{% set town = w.town_name or 'the town' %}
+  <h3>{{ w.town_name or 'The town' }}</h3>
+  {% if c.town_ref %}
+  <p>{% if c.town_state %}{{ c.town_state }}{% else %}Sent{% endif %}{% if c.town_url %} · <a href="{{ c.town_url }}" rel="noopener noreferrer">Open it there</a>{% endif %}</p>
+  {% for n in oc.town_notes %}
+  <div class="comment"><div class="bubble"><div class="small"><b>{{ n.who }}</b> · {{ n.created_at|when }}</div>{{ n.body|md }}</div></div>
+  {% endfor %}
+  <form method="post" action="{{ url_for('to_town', cid=c.id) }}">
+    {{ hidden() }}<textarea name="comment" rows="2" placeholder="Write to {{ town }}" required></textarea>
+    <button>Send to {{ town }}</button>
+  </form>
+  {% else %}
+  <details class="edit">
+    <summary>Send to {{ town }}</summary>
+    <p class="small">The title and the text go to {{ town }}. Comments below stay in the team.</p>
+    <form method="post" action="{{ url_for('to_town', cid=c.id) }}">{{ hidden() }}<button>Send</button></form>
+  </details>
+  {% endif %}{% endif %}
+
   <h3>Comments</h3>
   {% for m in oc.comments %}
   <div class="comment">

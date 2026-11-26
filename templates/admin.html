@@ -3,9 +3,19 @@
 <h1>Workspaces</h1>
 <div class="scroll panel">
 <table>
-<thead><tr><th>Name</th><th>Chiefs</th><th>Members</th></tr></thead>
+<thead><tr><th>Name</th><th>Chiefs</th><th>Members</th><th>Town</th></tr></thead>
 <tbody>
-{% for w in spaces %}<tr><td>{{ w.name }}</td><td>{{ w.chiefs or '' }}</td><td>{{ w.size }}</td></tr>{% endfor %}
+{% for w in spaces %}<tr><td>{{ w.name }}</td><td>{{ w.chiefs or '' }}</td><td>{{ w.size }}</td>
+<td><details><summary>{{ w.town_name or 'Link to a town' }}</summary>
+  <form method="post" action="{{ url_for('workspace_town', wid=w.id) }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input name="town_name" value="{{ w.town_name }}" placeholder="The town's name, shown on the button">
+    <input name="town_url" value="{{ w.town_url }}" placeholder="https://town.example">
+    <input name="town_key" type="password" autocomplete="off" placeholder="{{ 'Empty keeps the town\'s key' if w.town_url else 'The key the town gave' }}">
+    <button>Save</button>
+    <button name="new_key" value="1">{{ 'Save and make a new key for the town' if w.has_key else 'Save and make a key for the town' }}</button>
+  </form>
+</details></td></tr>{% endfor %}
 </tbody>
 </table>
 </div>

@@ -415,6 +415,73 @@ def test_a_chief_needs_a_name_and_an_email():
     assert not q("SELECT 1 FROM workspaces WHERE name = 'Half'")
 
 
+class Answer:
+    """What urlopen gives back, for a fake town."""
+
+    def __init__(self, data):
+        self.data = json.dumps(data).encode()
+
+    def read(self):
+        return self.data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+
+def test_a_card_goes_up_to_the_town_and_news_and_tasks_come_back(monkeypatch):
+    ada, _ = user("ada@example.com", "Ada", admin=True)
+    wid, bid = workspace_with_board(ada, "Village")
+    other, _ = workspace_with_board(ada, "Other village")
+    kim, _ = user("kim@example.com", "Kim")
+    town_form = {"town_name": "IT desk", "town_url": "https://town.example", "town_key": "k-town"}
+    assert post(kim, f"/admin/w/{wid}/town", **town_form).status_code == 403
+    post(ada, f"/admin/w/{other}/town", **town_form, new_key="1")
+    other_key = re.search(rf"/api/town/{other} (\S+)<", ada.get("/admin").data.decode()).group(1)
+    post(ada, f"/admin/w/{wid}/town", **town_form, new_key="1")
+    key = re.search(rf"/api/town/{wid} (\S+)<", ada.get("/admin").data.decode()).group(1)
+    todo = q("SELECT id FROM columns WHERE board_id = ? ORDER BY pos", bid)[0][0]
+    post(ada, f"/b/{bid}/cards/new", title="Disk full on db1", column=todo)
+    cid = q("SELECT max(id) FROM cards")[0][0]
+    sent = []
+
+    def town(req, timeout):
+        sent.append((req.full_url, req.get_header("Authorization"), json.loads(req.data)))
+        url = "https://town.example/t/7"
+        return Answer(
+            {"ticket": {"number": "INC-7", "ref": f"card-{cid}", "state": "New", "url": url}}
+        )
+
+    monkeypatch.setattr(lanes.urllib.request, "urlopen", town)
+    post(ada, f"/card/{cid}/town")
+    assert sent[0][:2] == ("https://town.example/api/tickets", "Bearer k-town")
+    assert sent[0][2]["ref"] == f"card-{cid}" and sent[0][2]["title"] == "Disk full on db1"
+    # The town calls back: wrong keys are refused, the right one changes the card
+    client = lanes.app.test_client()
+    news = {
+        "event": "changed",
+        "ticket": {"ref": f"card-{cid}", "state": "In progress", "url": "javascript:alert(1)"},
+        "changes": [{"field": "comment", "new": "On it", "who": "Sam", "at": "now"}],
+    }
+    for bad in ("wrong", other_key):
+        r = client.post(f"/api/town/{wid}", json=news, headers={"Authorization": f"Bearer {bad}"})
+        assert r.status_code == 403
+    auth = {"Authorization": f"Bearer {key}"}
+    assert client.post(f"/api/town/{wid}", json=news, headers=auth).status_code == 200
+    page = ada.get(f"/b/{bid}?card={cid}").data
+    assert b"In progress" in page and b"On it" in page and b"javascript:" not in page
+    post(ada, f"/card/{cid}/town", comment="Thanks")
+    assert sent[-1][0] == f"https://town.example/api/tickets/card-{cid}"
+    assert sent[-1][2] == {"comment": "Thanks"}
+    # The town sends a task down; the same ref again makes no second card
+    task = {"ref": "INC-9", "title": "Read the new policy", "url": "https://town.example/t/9"}
+    assert client.post(f"/api/town/{wid}", json=task, headers=auth).status_code == 201
+    assert client.post(f"/api/town/{wid}", json=task, headers=auth).status_code == 200
+    assert [r[0] for r in q("SELECT board_id FROM cards WHERE town_ref = 'INC-9'")] == [bid]
+
+
 def test_a_card_past_its_date_shows_red_and_is_listed_by_person():
     uma, uma_id = user("uma@example.com", "Uma Ink", admin=True)
     wid, bid = workspace_with_board(uma)

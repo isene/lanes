@@ -37,7 +37,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.11.0"
+__version__ = "0.12.0"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -115,6 +115,9 @@ CREATE TABLE IF NOT EXISTS attachments (
   name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, data BLOB NOT NULL,
   user_id INTEGER REFERENCES users(id), created_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS attachments_card ON attachments(card_id);
+CREATE TABLE IF NOT EXISTS town_notes (
+  id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  who TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL);
 """
 
 app = Flask(__name__)
@@ -190,6 +193,13 @@ def init_db() -> None:
             ("workspaces", "moved_to", "TEXT NOT NULL DEFAULT ''"),  # the new address after a move
             ("workspaces", "color", "TEXT NOT NULL DEFAULT ''"),  # tints the header
             ("members", "chief", "INTEGER NOT NULL DEFAULT 0"),  # removes members, names chiefs
+            ("workspaces", "town_name", "TEXT NOT NULL DEFAULT ''"),  # the town cards go up to
+            ("workspaces", "town_url", "TEXT NOT NULL DEFAULT ''"),
+            ("workspaces", "town_key", "TEXT NOT NULL DEFAULT ''"),  # lanes sends it to the town
+            ("workspaces", "key_hash", "TEXT NOT NULL DEFAULT ''"),  # the town sends this key
+            ("cards", "town_ref", "TEXT"),  # the card's name at the town
+            ("cards", "town_url", "TEXT"),
+            ("cards", "town_state", "TEXT"),
         ):
             if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
@@ -314,6 +324,8 @@ def log_in(uid: int) -> None:
 
 @app.before_request
 def guard():
+    if request.endpoint == "town_api":
+        return None  # the town shows a key instead of a login and a form token
     if request.method == "POST":
         token = session.get("csrf", "")
         if not token or not hmac.compare_digest(token, request.form.get("csrf", "")):
@@ -1012,6 +1024,9 @@ def card_panel(bid: int, cid: int) -> dict | None:
             "SELECT id, name, type, size FROM attachments WHERE card_id = ? ORDER BY id", (cid,)
         ).fetchall(),
         "author": con.execute("SELECT name FROM users WHERE id = ?", (c["created_by"],)).fetchone(),
+        "town_notes": con.execute(
+            "SELECT * FROM town_notes WHERE card_id = ? ORDER BY id", (cid,)
+        ).fetchall(),
     }
 
 
@@ -1529,6 +1544,178 @@ def comment(cid):
     return back(c["board_id"])
 
 
+# The town: another program a team raises cards to, and that sends news and new cards back.
+# lanes calls POST <town>/api/tickets with the town's key; the town calls /api/town/<wid> with ours.
+
+
+def hash_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+def web(url) -> str:
+    """A link from the town, kept only when it is a web address."""
+    return url if isinstance(url, str) and re.match(r"https?://", url) else ""
+
+
+def town_call(w: sqlite3.Row, path: str, data: dict) -> dict:
+    """POST to the town and return its answer. A failed call raises, and is not tried again."""
+    req = urllib.request.Request(
+        w["town_url"].rstrip("/") + path,
+        json.dumps(data).encode(),
+        {"Authorization": f"Bearer {w['town_key']}", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=15) as answer:
+        return json.loads(answer.read() or b"{}")
+
+
+def town_card(con: sqlite3.Connection, wid: int, ref: str) -> sqlite3.Row | None:
+    sql = "SELECT c.* FROM cards c JOIN boards b ON b.id = c.board_id WHERE b.workspace_id = ? AND c.town_ref = ?"
+    return con.execute(sql, (wid, ref)).fetchone() if ref else None
+
+
+@app.route("/card/<int:cid>/town", methods=["POST"])
+def to_town(cid):
+    """Send a card up to the town, or write to the town about a card that is there."""
+    c, con, me = get_card(cid), db(), current_user()
+    sql = "SELECT w.* FROM workspaces w JOIN boards b ON b.workspace_id = w.id WHERE b.id = ?"
+    w = con.execute(sql, (c["board_id"],)).fetchone()
+    if not w["town_url"]:
+        abort(404)
+    text = request.form.get("comment", "").strip()
+    try:
+        if c["town_ref"] and text:
+            town_call(w, f"/api/tickets/{quote(c['town_ref'], safe='')}", {"comment": text})
+            con.execute(
+                "INSERT INTO town_notes (card_id, who, body, created_at) VALUES (?, ?, ?, ?)",
+                (cid, me["name"], text, now()),
+            )
+        elif not c["town_ref"]:
+            ref, body = (
+                f"card-{cid}",
+                f"{c['body']}\n\nSent by {me['name']} from {w['name']}.".strip(),
+            )
+            answer = town_call(w, "/api/tickets", {"ref": ref, "title": c["title"], "body": body})
+            t = answer.get("ticket", answer)
+            con.execute(
+                "UPDATE cards SET town_ref = ?, town_url = ?, town_state = ? WHERE id = ?",
+                (ref, web(t.get("url")), str(t.get("state") or ""), cid),
+            )
+    except (OSError, ValueError, AttributeError) as e:
+        flash(
+            f"{w['town_name'] or 'The town'} did not take it ({e}). Nothing was saved; try again later."
+        )
+        return back(c["board_id"], cid)
+    bump(con, c["board_id"])
+    con.commit()
+    return back(c["board_id"], cid)
+
+
+@app.route("/api/town/<int:wid>", methods=["POST"])
+def town_api(wid):
+    """The town sends news on a ticket (the JSON has an "event") or a new card for the team (it has none)."""
+    con = db()
+    w = con.execute("SELECT * FROM workspaces WHERE id = ?", (wid,)).fetchone()
+    key = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    if not (w and w["key_hash"] and key and hmac.compare_digest(w["key_hash"], hash_key(key))):
+        abort(403)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        abort(400)
+    if "event" in data:
+        t = data.get("ticket") if isinstance(data.get("ticket"), dict) else {}
+        c = town_card(con, wid, str(t.get("ref") or ""))
+        if c is None:
+            abort(404)
+        con.execute(
+            "UPDATE cards SET town_state = ?, town_url = ? WHERE id = ?",
+            (
+                str(t.get("state") or c["town_state"] or ""),
+                web(t.get("url")) or c["town_url"],
+                c["id"],
+            ),
+        )
+        for ch in data.get("changes") or []:
+            if isinstance(ch, dict) and ch.get("field") == "comment" and ch.get("new"):
+                con.execute(
+                    "INSERT INTO town_notes (card_id, who, body, created_at) VALUES (?, ?, ?, ?)",
+                    (
+                        c["id"],
+                        str(ch.get("who") or w["town_name"] or "The town"),
+                        str(ch["new"]),
+                        now(),
+                    ),
+                )
+        bump(con, c["board_id"])
+        con.commit()
+        return {"card": c["id"]}
+    ref, title = str(data.get("ref") or "").strip(), str(data.get("title") or "").strip()
+    if not ref or not title:
+        abort(400)
+    c = town_card(con, wid, ref)
+    if c:
+        return {"card": c["id"]}
+    # A new card goes to the first column of the workspace's first board, in the first lane.
+    b = con.execute(
+        "SELECT * FROM boards WHERE workspace_id = ? ORDER BY id LIMIT 1", (wid,)
+    ).fetchone()
+    if b is None:
+        abort(404)
+    col = con.execute(
+        "SELECT * FROM columns WHERE board_id = ? ORDER BY pos LIMIT 1", (b["id"],)
+    ).fetchone()
+    lane = con.execute(
+        "SELECT id FROM lanes WHERE board_id = ? ORDER BY pos LIMIT 1", (b["id"],)
+    ).fetchone()
+    con.execute("UPDATE boards SET next_ref = next_ref + 1 WHERE id = ?", (b["id"],))
+    cid = con.execute(
+        "INSERT INTO cards (board_id, ref, column_id, lane_id, title, body, pos, created_at,"
+        " updated_at, done_at, town_ref, town_url, town_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')",
+        (
+            b["id"],
+            b["next_ref"],
+            col["id"],
+            lane["id"] if lane else None,
+            title,
+            str(data.get("body") or ""),
+            card_pos(con, col["id"], None, None),
+            now(),
+            now(),
+            now() if col["done"] else None,
+            ref,
+            web(data.get("url")),
+        ),
+    ).lastrowid
+    bump(con, b["id"])
+    con.commit()
+    return {"card": cid}, 201
+
+
+@app.route("/admin/w/<int:wid>/town", methods=["POST"])
+def workspace_town(wid):
+    """The admin links a workspace to a town: its name, its address and the key it gave."""
+    admin_only()
+    f, con = request.form, db()
+    if not con.execute("SELECT 1 FROM workspaces WHERE id = ?", (wid,)).fetchone():
+        abort(404)
+    url = f.get("town_url", "").strip()
+    if url and not web(url):
+        flash("The town's address starts with https://")
+        return redirect(url_for("admin"))
+    con.execute(
+        "UPDATE workspaces SET town_name = ?, town_url = ? WHERE id = ?",
+        (f.get("town_name", "").strip(), url, wid),
+    )
+    if f.get("town_key", "").strip():
+        con.execute("UPDATE workspaces SET town_key = ? WHERE id = ?", (f["town_key"].strip(), wid))
+    if f.get("new_key"):
+        key = secrets.token_urlsafe(32)
+        con.execute("UPDATE workspaces SET key_hash = ? WHERE id = ?", (hash_key(key), wid))
+        address = url_for("town_api", wid=wid, _external=True)
+        flash(f"Give the town this address and key. The key shows only now: {address} {key}")
+    con.commit()
+    return redirect(url_for("admin"))
+
+
 # Import from Taiga: Admin, Project, Export gives a JSON file
 
 
@@ -1830,7 +2017,8 @@ def admin():
     spaces = (
         db()
         .execute(
-            "SELECT w.name, (SELECT COUNT(*) FROM members m WHERE m.workspace_id = w.id) AS size,"
+            "SELECT w.id, w.name, w.town_name, w.town_url, w.key_hash != '' AS has_key,"
+            " (SELECT COUNT(*) FROM members m WHERE m.workspace_id = w.id) AS size,"
             " (SELECT group_concat(u.name, ', ') FROM members m JOIN users u ON u.id = m.user_id"
             " WHERE m.workspace_id = w.id AND m.chief) AS chiefs FROM workspaces w ORDER BY w.name"
         )
