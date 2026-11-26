@@ -1,5 +1,16 @@
 {% extends "base.html" %}
 {% block body %}
+<h1>Workspaces</h1>
+<div class="scroll panel">
+<table>
+<thead><tr><th>Name</th><th>Chiefs</th><th>Members</th></tr></thead>
+<tbody>
+{% for w in spaces %}<tr><td>{{ w.name }}</td><td>{{ w.chiefs or '' }}</td><td>{{ w.size }}</td></tr>{% endfor %}
+</tbody>
+</table>
+</div>
+<p class="small">You see a workspace's boards only as a member.</p>
+
 <h1>Users</h1>
 <div class="scroll panel">
 <table>

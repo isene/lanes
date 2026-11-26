@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.0 (2026-11-26)
+
+- A workspace has chiefs. A chief removes members and makes other members chiefs; before,
+  only an admin could remove anyone.
+- The admin names a chief when setting up a workspace. The chief is then the first member,
+  gets an invite link if new, and the admin stays outside the workspace.
+- Each workspace picks its own colour, which tints the bar at the top of its pages.
+- The admin page lists the workspaces with their chiefs and number of members, never their
+  boards.
+
 ## 0.9.0 (2026-11-20)
 
 - lanes posts the late cards of a workspace to a chat webhook at 09:00 on weekdays, from the

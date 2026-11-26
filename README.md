@@ -39,7 +39,11 @@ Enough to move one team off Taiga.
 - Log in with a password and a code from a phone app; new users join by an
   invite link.
 - Workspaces: one per team, each with its own members and boards. Nobody
-  sees a workspace they are not a member of. An admin can remove a member.
+  sees a workspace they are not a member of, admins included. An admin sets
+  one up with a name and a chief; the admin page lists each workspace's
+  name, chiefs and size, never its boards.
+- A chief removes members and makes other members chiefs. Any member picks
+  the workspace's colour, which tints the bar at the top.
 - Boards with columns (name, colour, a limit on how many cards), lanes and
   cards.
 - Cards: a number (#123), title, text, people, labels, sub-tasks, a due date,

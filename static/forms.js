@@ -31,6 +31,8 @@ async function quietSave(form) {
     const theme = page.documentElement.dataset.theme;
     if (theme) document.documentElement.dataset.theme = theme;
     else delete document.documentElement.dataset.theme;
+    const head = page.querySelector("header"); // a team's colour shows at once
+    if (head) document.querySelector("header").setAttribute("style", head.getAttribute("style") || "");
   } catch (e) {
     form.submit();
   }

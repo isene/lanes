@@ -24,7 +24,10 @@
 <form method="post" action="{{ url_for('new_workspace') }}" class="row panel add">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <input name="name" class="grow" placeholder="New workspace, one per team" required>
+  <input name="chief_name" placeholder="Chief's name">
+  <input name="chief_email" type="email" placeholder="Chief's email">
   <button>Add workspace</button>
 </form>
+<p class="small">The chief is the first member. With no chief named, you are, and you see the workspace.</p>
 {% endif %}
 {% endblock %}

@@ -40,6 +40,7 @@ a { color: var(--accent); text-underline-offset: 3px; }
 header { position: sticky; top: 0; z-index: 30; display: flex; justify-content: space-between;
   align-items: center; gap: 12px; height: 50px; padding: 0 18px; color: #fff;
   background: linear-gradient(90deg, #0d2a2f, #143a4a 55%, #1d2f5e); }
+header[style] { background: color-mix(in oklab, var(--village) 60%, #0d2a2f); }  /* a team's colour */
 header nav { display: flex; gap: 14px; align-items: center; min-width: 0; }
 header a, header button.link { color: #d9f1f0; white-space: nowrap; }
 .crumbs a { text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

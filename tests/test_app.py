@@ -381,6 +381,40 @@ def test_an_admin_takes_someone_off_a_workspace():
     assert kim.get(f"/w/{wid}").status_code == 404
 
 
+def test_an_admin_sets_up_a_team_for_a_chief_and_stays_outside():
+    ada, _ = user("ada@example.com", "Ada", admin=True)
+    r = post(ada, "/w/new", name="Party crew", chief_name="Bo", chief_email="bo@example.com")
+    assert r.headers["Location"].endswith("/admin")
+    wid = q("SELECT id FROM workspaces WHERE name = 'Party crew'")[0][0]
+    (chief,) = q("SELECT user_id FROM members WHERE workspace_id = ? AND chief", wid)
+    assert chief[0] == q("SELECT id FROM users WHERE email = 'bo@example.com'")[0][0]
+    assert ada.get(f"/w/{wid}").status_code == 404  # the admin is not a member
+    page = ada.get("/admin").data
+    assert b"Party crew" in page and b"Invite link for Bo" in page
+    # Bo logs in, invites Cy, makes Cy chief; Cy then removes Di
+    bo, _ = user("bo@example.com", "Bo")
+    cy, cy_id = user("cy@example.com", "Cy")
+    di, di_id = user("di@example.com", "Di")
+    post(bo, f"/w/{wid}/invite", name="Cy", email="cy@example.com")
+    post(bo, f"/w/{wid}/invite", name="Di", email="di@example.com")
+    assert post(di, f"/w/{wid}/remove/{cy_id}").status_code == 403  # a plain member
+    assert post(di, f"/w/{wid}/chief/{di_id}").status_code == 403
+    post(bo, f"/w/{wid}/chief/{cy_id}")
+    post(cy, f"/w/{wid}/remove/{di_id}")
+    assert not q("SELECT 1 FROM members WHERE user_id = ?", di_id)
+    assert b"(chief)" in bo.get(f"/w/{wid}").data
+    # a team colour tints the header, and a bad value is ignored
+    post(cy, f"/w/{wid}/color", color="#ff8800")
+    post(cy, f"/w/{wid}/color", color="red; x")
+    assert b'style="--village: #ff8800"' in bo.get(f"/w/{wid}").data
+
+
+def test_a_chief_needs_a_name_and_an_email():
+    ada, _ = user("ada@example.com", "Ada", admin=True)
+    post(ada, "/w/new", name="Half", chief_email="bo@example.com")
+    assert not q("SELECT 1 FROM workspaces WHERE name = 'Half'")
+
+
 def test_a_card_past_its_date_shows_red_and_is_listed_by_person():
     uma, uma_id = user("uma@example.com", "Uma Ink", admin=True)
     wid, bid = workspace_with_board(uma)

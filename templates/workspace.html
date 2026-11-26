@@ -11,6 +11,11 @@
     {% if w.logo %}<button name="remove_logo" value="1" class="link danger">Remove the logo</button>{% endif %}
   </div>
 </form>
+<form method="post" action="{{ url_for('workspace_color', wid=w.id) }}" class="row" data-autosubmit>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>The workspace's colour, shown at the top <input type="color" name="color" value="{{ w.color or '#143a4a' }}"></label>
+  <button class="nojs">Save</button>
+</form>
 
 <h2>Boards</h2>
 <div class="tiles">
@@ -29,7 +34,7 @@
 <tbody>
 {% for u in people %}
 <tr>
-  <td>{{ avatar(u.id, u.name, u.pic, 'sm') }} {{ u.name }}</td>
+  <td>{{ avatar(u.id, u.name, u.pic, 'sm') }} {{ u.name }}{% if u.chief %} <span class="small">(chief)</span>{% endif %}</td>
   <td class="wide">{{ u.email }}</td>
   <td class="small">
     {% if u.pw_hash %}active
@@ -40,7 +45,11 @@
       </form>
     {% endif %}
   </td>
-  <td>{% if me.is_admin and u.id != me.id %}
+  <td>{% if lead and u.id != me.id %}
+    {% if not u.chief %}<form method="post" action="{{ url_for('workspace_chief', wid=w.id, uid=u.id) }}" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="link">Make chief</button>
+    </form>{% endif %}
     <form method="post" action="{{ url_for('workspace_remove', wid=w.id, uid=u.id) }}" class="inline">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="link danger">Remove</button>
@@ -57,7 +66,7 @@
   <button>Add a member</button>
 </form>
 <p class="small">A new member gets an invite link. Send it yourself; it works once, for 7 days.
-An admin can remove a member; their cards and comments keep their name.</p>
+A chief or an admin can remove a member; their cards and comments keep their name.</p>
 
 <h2>Import from Taiga</h2>
 <p class="small">In Taiga, open the project, then Admin, Project and Export. Upload the file here

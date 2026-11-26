@@ -188,6 +188,8 @@ def init_db() -> None:
             ("cards", "due", "TEXT"),
             ("cards", "cover", "INTEGER"),  # the attached picture shown on the card
             ("workspaces", "moved_to", "TEXT NOT NULL DEFAULT ''"),  # the new address after a move
+            ("workspaces", "color", "TEXT NOT NULL DEFAULT ''"),  # tints the header
+            ("members", "chief", "INTEGER NOT NULL DEFAULT 0"),  # removes members, names chiefs
         ):
             if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
@@ -387,6 +389,10 @@ def ws_logo(w: sqlite3.Row) -> Markup:
     if w["logo"]:
         src = url_for("workspace_logo", wid=w["id"], v=w["logo"])
         return Markup('<img class="wslogo" src="{}" alt="">').format(src)
+    if w["color"]:
+        return Markup('<span class="wslogo" style="background: {}">{}</span>').format(
+            w["color"], initials(w["name"])
+        )
     return Markup('<span class="wslogo a{}">{}</span>').format(w["id"] % 8, initials(w["name"]))
 
 
@@ -565,19 +571,36 @@ def home():
 
 @app.route("/w/new", methods=["POST"])
 def new_workspace():
+    """An admin sets up a team. Its chief is the first member; with no chief named, the admin is."""
     admin_only()
-    name = request.form.get("name", "").strip()
+    f = request.form
+    name, email, chief = (f.get(k, "").strip() for k in ("name", "chief_email", "chief_name"))
     if not name:
         return redirect(url_for("home"))
+    if email and ("@" not in email or not chief):
+        flash("Give the chief both a name and an email.")
+        return redirect(url_for("home"))
     con = db()
+    uid = find_or_add_user(con, email, chief) if email else current_user()["id"]
     wid = con.execute(
         "INSERT INTO workspaces (name, created_at) VALUES (?, ?)", (name, now())
     ).lastrowid
-    con.execute(
-        "INSERT INTO members (workspace_id, user_id) VALUES (?, ?)", (wid, current_user()["id"])
-    )
+    con.execute("INSERT INTO members (workspace_id, user_id, chief) VALUES (?, ?, 1)", (wid, uid))
     con.commit()
-    return redirect(url_for("workspace", wid=wid))
+    if uid == current_user()["id"]:
+        return redirect(url_for("workspace", wid=wid))
+    user = con.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+    link = "" if user["pw_hash"] else f" Invite link for {user['name']}: {make_invite(con, uid)}"
+    flash(f"{name} is set up, with {user['name']} as chief.{link}")
+    return redirect(url_for("admin"))
+
+
+def leads(wid: int) -> bool:
+    """A chief of the workspace, or an admin."""
+    me = current_user()
+    sql = "SELECT chief FROM members WHERE workspace_id = ? AND user_id = ?"
+    row = db().execute(sql, (wid, me["id"])).fetchone()
+    return bool(me["is_admin"] or (row and row["chief"]))
 
 
 @app.route("/w/<int:wid>")
@@ -588,11 +611,37 @@ def workspace(wid):
         "SELECT * FROM boards WHERE workspace_id = ? ORDER BY name", (wid,)
     ).fetchall()
     people = con.execute(
-        "SELECT u.* FROM users u JOIN members m ON m.user_id = u.id"
+        "SELECT u.*, m.chief FROM users u JOIN members m ON m.user_id = u.id"
         " WHERE m.workspace_id = ? ORDER BY u.name",
         (wid,),
     ).fetchall()
-    return render_template("workspace.html", w=w, boards=boards, people=people)
+    return render_template("workspace.html", w=w, boards=boards, people=people, lead=leads(wid))
+
+
+@app.route("/w/<int:wid>/color", methods=["POST"])
+def workspace_color(wid):
+    """Any member picks the team's colour. It tints the header on the team's pages."""
+    get_workspace(wid)
+    color = request.form.get("color", "")
+    if COLOR.fullmatch(color):
+        db().execute("UPDATE workspaces SET color = ? WHERE id = ?", (color, wid))
+        db().commit()
+    return redirect(url_for("workspace", wid=wid))
+
+
+@app.route("/w/<int:wid>/chief/<int:uid>", methods=["POST"])
+def workspace_chief(wid, uid):
+    """A chief makes another member a chief too."""
+    get_workspace(wid)
+    if not leads(wid):
+        abort(403)
+    con = db()
+    if not con.execute(
+        "UPDATE members SET chief = 1 WHERE workspace_id = ? AND user_id = ?", (wid, uid)
+    ).rowcount:
+        abort(404)
+    con.commit()
+    return redirect(url_for("workspace", wid=wid))
 
 
 @app.route("/w/<int:wid>/invite", methods=["POST"])
@@ -617,9 +666,10 @@ def workspace_invite(wid):
 
 @app.route("/w/<int:wid>/remove/<int:uid>", methods=["POST"])
 def workspace_remove(wid, uid):
-    """An admin takes someone off the workspace. Their cards and comments keep their name."""
+    """A chief or an admin takes someone off the workspace. Their cards and comments keep their name."""
     get_workspace(wid)
-    admin_only()
+    if not leads(wid):
+        abort(403)
     if uid == current_user()["id"]:
         abort(400)
     con = db()
@@ -1726,7 +1776,17 @@ def admin():
         )
         .fetchall()
     )
-    return render_template("admin.html", users=users)
+    # The admin sees each team's name, chiefs and size, never what is inside it.
+    spaces = (
+        db()
+        .execute(
+            "SELECT w.name, (SELECT COUNT(*) FROM members m WHERE m.workspace_id = w.id) AS size,"
+            " (SELECT group_concat(u.name, ', ') FROM members m JOIN users u ON u.id = m.user_id"
+            " WHERE m.workspace_id = w.id AND m.chief) AS chiefs FROM workspaces w ORDER BY w.name"
+        )
+        .fetchall()
+    )
+    return render_template("admin.html", users=users, spaces=spaces)
 
 
 @app.route("/admin/<int:uid>/invite", methods=["POST"])
