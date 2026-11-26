@@ -1,9 +1,16 @@
 # Changelog
 
+## 0.14.1 (2026-11-26)
+
+- Fixed: a workspace's colour never showed, and left the top bar with no background, so its white
+  text could not be read. The page's security header stops a style attribute; the colour now comes
+  from a small style sheet.
+
 ## 0.14.0 (2026-11-26)
 
 - A program that has lanes mounted can hand over a colour and an emblem, so the board looks like
   the site around it. The colour tints the top bar; the emblem takes the place of the lanes logo.
+
 
 ## 0.13.0 (2026-11-26)
 

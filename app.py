@@ -37,7 +37,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.14.0"
+__version__ = "0.14.1"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -808,6 +808,17 @@ def edit_board(bid):
 @app.route("/b/<int:bid>/version")
 def board_version(bid):
     return Response(str(get_board(bid)["version"]), mimetype="text/plain")
+
+
+@app.route("/tint/<colour>.css")
+def tint(colour: str):
+    """The top bar's colour as a style sheet. The page's security header lets no style attribute through,
+    so a colour set that way never showed."""
+    if not re.fullmatch(r"[0-9a-fA-F]{6}", colour):
+        abort(404)
+    resp = Response(f"header {{ --village: #{colour}; }}\n", mimetype="text/css")
+    resp.headers["Cache-Control"] = "private, max-age=31536000, immutable"
+    return resp
 
 
 @app.route("/b/<int:bid>/colors.css")

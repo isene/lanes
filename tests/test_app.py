@@ -406,7 +406,9 @@ def test_an_admin_sets_up_a_team_for_a_chief_and_stays_outside():
     # a team colour tints the header, and a bad value is ignored
     post(cy, f"/w/{wid}/color", color="#ff8800")
     post(cy, f"/w/{wid}/color", color="red; x")
-    assert b'style="--village: #ff8800"' in bo.get(f"/w/{wid}").data
+    assert (
+        b'href="/tint/ff8800.css"' in bo.get(f"/w/{wid}").data
+    )  # a style sheet: an attribute is stopped
 
 
 def test_a_chief_needs_a_name_and_an_email():
@@ -689,14 +691,20 @@ def test_a_program_around_lanes_hands_over_the_login_and_the_address(monkeypatch
     assert r.headers["Location"] == f"/board/b/{bid}"
     page = b.get(**at(f"/b/{bid}")).data.decode()  # Ben is a member without an invite
     assert f'data-check="/board/b/{bid}/version"' in page and ">Town hall</a>" in page
-    assert 'style="--village: #7a43b0"' in page and 'src="/emblem?v=1"' in page
+    assert 'href="/board/tint/7a43b0.css"' in page and 'src="/emblem?v=1"' in page
+    assert '<header class="tinted">' in page
+    sheet = b.get(
+        **at("/tint/7a43b0.css")
+    )  # a style attribute would be stopped by the security header
+    assert sheet.data == b"header { --village: #7a43b0; }\n" and sheet.mimetype == "text/css"
+    assert b.get(**at("/tint/red.css")).status_code == 404
     plain = (
         visitor({**ben, "colour": "red; x", "emblem": "//elsewhere.example/x.svg"})
         .get(**at("/"))
         .data.decode()
     )
     assert (
-        "--village" not in plain and "elsewhere" not in plain and "logo.svg" in plain
+        "/tint/" not in plain and "elsewhere" not in plain and "logo.svg" in plain
     )  # only safe values
     assert f'name="next" value="/board/b/{bid}"' in page
     rows = q(
