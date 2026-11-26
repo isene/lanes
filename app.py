@@ -37,7 +37,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.8.1"
+__version__ = "0.11.0"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -245,8 +245,50 @@ def find_or_add_user(con: sqlite3.Connection, email: str, name: str, admin: bool
     return cur.lastrowid
 
 
+def guest(told: dict) -> sqlite3.Row:
+    """The person the program around lanes says is logged in. That program has lanes mounted under an
+    address of its own, such as /board, and puts {mail, name, chief, workspace, home, home_name} in the
+    WSGI environ as "lanes.user". A visitor cannot set that key: what a browser sends arrives as HTTP_...
+    The person is a member of the one workspace such a lanes has, and a chief when the program says so.
+    """
+    con, mail, chief = db(), str(told["mail"]).strip().lower(), int(bool(told.get("chief")))
+    sql = (
+        "SELECT u.*, m.chief FROM users u JOIN members m ON m.user_id = u.id"
+        " WHERE u.email = ? ORDER BY m.workspace_id LIMIT 1"
+    )
+    row = con.execute(sql, (mail,)).fetchone()
+    if row is None or row["chief"] != chief:
+        uid = find_or_add_user(con, mail, str(told.get("name") or ""))
+        w = con.execute("SELECT id FROM workspaces ORDER BY id LIMIT 1").fetchone()
+        wid = (
+            w["id"]
+            if w
+            else con.execute(
+                "INSERT INTO workspaces (name, created_at) VALUES (?, ?)",
+                (str(told.get("workspace") or "Board"), now()),
+            ).lastrowid
+        )
+        con.execute(
+            "INSERT INTO members (workspace_id, user_id, chief) VALUES (?, ?, ?)"
+            " ON CONFLICT (workspace_id, user_id) DO UPDATE SET chief = excluded.chief",
+            (wid, uid, chief),
+        )
+        con.commit()
+        row = con.execute(sql, (mail,)).fetchone()
+    return row
+
+
+def here() -> str:
+    """The address of this page, with the address lanes is mounted under in front."""
+    return request.script_root + request.full_path.rstrip("?")
+
+
 def current_user() -> sqlite3.Row | None:
     if "user" not in g:
+        told = request.environ.get("lanes.user")
+        if told:
+            g.user = guest(told)
+            return g.user
         uid = session.get("uid")
         g.user = (
             db()
@@ -327,7 +369,14 @@ def template_values():
     if "csrf" not in session:
         session["csrf"] = secrets.token_urlsafe(32)
     me = current_user()
-    return {"csrf": session["csrf"], "me": me, "now": now(), "crumb": me and crumb(me)}
+    return {
+        "csrf": session["csrf"],
+        "me": me,
+        "now": now(),
+        "crumb": me and crumb(me),
+        "here": here(),
+        "host": request.environ.get("lanes.user"),  # set when another program has lanes mounted
+    }
 
 
 def crumb(me: sqlite3.Row) -> dict | None:
@@ -412,6 +461,8 @@ def render(text: str | None) -> Markup:
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if request.environ.get("lanes.user"):
+        return redirect(url_for("home"))  # the program around lanes owns the login
     if request.method == "POST":
         addr = request.remote_addr or "?"
         if too_many_fails(addr):
@@ -529,7 +580,7 @@ def get_part(table: str, pid: int) -> sqlite3.Row:
 def back(bid: int, card: int | None = None):
     """Go back to the board view the form came from, or to the plain board, with a card open."""
     nxt = request.form.get("next", "")
-    if not re.match(rf"/b/{bid}(\?|$|/archive)", nxt):
+    if not re.match(rf"{re.escape(request.script_root)}/b/{bid}(\?|$|/archive)", nxt):
         nxt = url_for("board", bid=bid)
     if card:
         path, _, query = nxt.partition("?")
@@ -931,7 +982,6 @@ def board(bid):
         n_archived=n_archived,
         open_card=open_card,
         view=view,
-        here=request.full_path.rstrip("?"),
     )
 
 

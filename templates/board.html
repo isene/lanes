@@ -85,7 +85,7 @@
   </details>
 </div>
 
-<div class="board" id="board" data-board="{{ b.id }}" data-version="{{ b.version }}" data-by="{{ by }}">
+<div class="board" id="board" data-board="{{ b.id }}" data-version="{{ b.version }}" data-check="{{ url_for('board_version', bid=b.id) }}" data-by="{{ by }}">
   <div class="brow head">
     {% for col in cols %}{% set n = per_column.get(col.id, 0) %}
     <div class="colhead col-{{ col.id }}" data-col="{{ col.id }}">

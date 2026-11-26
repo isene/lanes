@@ -531,7 +531,9 @@ def at(text):
 
 
 def test_the_morning_post_skips_the_weekend():
-    assert lanes.next_post(9, at("2026-11-20 10:00")) == at("2026-11-23 09:00") - at("2026-11-20 10:00")
+    assert lanes.next_post(9, at("2026-11-20 10:00")) == at("2026-11-23 09:00") - at(
+        "2026-11-20 10:00"
+    )
     assert lanes.next_post(9, at("2026-11-23 08:00")) == 3600
 
 
@@ -550,10 +552,73 @@ def test_the_webhook_gets_the_text_and_the_secret(monkeypatch):
             pass
 
     def urlopen(req, timeout):
-        sent.update(url=req.full_url, auth=req.get_header("Authorization"), body=json.loads(req.data))
+        sent.update(
+            url=req.full_url, auth=req.get_header("Authorization"), body=json.loads(req.data)
+        )
         return Answer()
 
     monkeypatch.setattr(lanes.urllib.request, "urlopen", urlopen)
     lanes.post_to_webhook("https://chat.example/hook", "s3", "Cards past their date:")
-    assert sent == {"url": "https://chat.example/hook", "auth": "Bearer s3",
-                    "body": {"schema": "generic.message.v1", "text": "Cards past their date:"}}
+    assert sent == {
+        "url": "https://chat.example/hook",
+        "auth": "Bearer s3",
+        "body": {"schema": "generic.message.v1", "text": "Cards past their date:"},
+    }
+
+
+def test_a_program_around_lanes_hands_over_the_login_and_the_address(monkeypatch):
+    """Mounted under /board: no password, one workspace for all, and every link under /board."""
+    monkeypatch.setattr(
+        lanes, "DATA", TMP / "host"
+    )  # a database of its own, as a mounted lanes has
+    lanes.init_db()
+    ada = {"mail": "Ada@Host.example", "name": "Ada Host", "chief": True, "workspace": "Village"}
+    ben = {"mail": "ben@host.example", "name": "Ben Host", "home": "/", "home_name": "Town hall"}
+
+    def visitor(who):
+        client = lanes.app.test_client()
+        client.environ_base["lanes.user"] = who
+        return client
+
+    def at(path):
+        return {"path": path, "base_url": "http://localhost/board"}
+
+    a, b = visitor(ada), visitor(ben)
+    page = a.get(**at("/")).data.decode()
+    assert "Village" in page and "Log out" not in page
+    wid = q("SELECT id FROM workspaces WHERE name = 'Village'")[0][0]
+    assert f'href="/board/w/{wid}"' in page
+    assert a.get(**at("/login")).headers["Location"] == "/board/"
+    with a.session_transaction(base_url="http://localhost/board") as s:
+        token = s["csrf"]
+    r = a.post(**at(f"/w/{wid}/boards/new"), data={"csrf": token, "name": "Work"})
+    bid = last_id(r.headers["Location"])
+    assert r.headers["Location"] == f"/board/b/{bid}"
+    page = b.get(**at(f"/b/{bid}")).data.decode()  # Ben is a member without an invite
+    assert f'data-check="/board/b/{bid}/version"' in page and ">Town hall</a>" in page
+    assert f'name="next" value="/board/b/{bid}"' in page
+    rows = q(
+        "SELECT u.email, m.chief, u.pw_hash FROM users u JOIN members m ON m.user_id = u.id"
+        " WHERE m.workspace_id = ? ORDER BY u.email",
+        wid,
+    )
+    assert [tuple(r) for r in rows] == [
+        ("ada@host.example", 1, None),
+        ("ben@host.example", 0, None),
+    ]
+    page = b.get(**at(f"/w/{wid}")).data.decode()
+    assert "invite" not in page and "Remove</button>" not in page
+    # a header a visitor sends is never the login
+    stranger = lanes.app.test_client()
+    r = stranger.get(
+        "/", headers={"Lanes-User": "ada@host.example", "lanes.user": "ada@host.example"}
+    )
+    assert r.headers["Location"].endswith("/login")
+    # a chief the program no longer names loses the role at the next visit
+    visitor(dict(ada, chief=False)).get(**at("/"))
+    assert (
+        q(
+            "SELECT m.chief FROM members m JOIN users u ON u.id = m.user_id WHERE u.email = 'ada@host.example'"
+        )[0][0]
+        == 0
+    )

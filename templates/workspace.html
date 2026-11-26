@@ -30,13 +30,13 @@
 <h2>Members</h2>
 <div class="scroll panel">
 <table>
-<thead><tr><th>Name</th><th class="wide">Email</th><th>Login</th><th></th></tr></thead>
+<thead><tr><th>Name</th><th class="wide">Email</th>{% if not host %}<th>Login</th><th></th>{% endif %}</tr></thead>
 <tbody>
 {% for u in people %}
 <tr>
   <td>{{ avatar(u.id, u.name, u.pic, 'sm') }} {{ u.name }}{% if u.chief %} <span class="small">(chief)</span>{% endif %}</td>
   <td class="wide">{{ u.email }}</td>
-  <td class="small">
+  {% if not host %}<td class="small">
     {% if u.pw_hash %}active
     {% else %}{% if u.invite_expires and u.invite_expires > now %}invited, link works until {{ u.invite_expires|when }}{% else %}not invited yet{% endif %}
       <form method="post" action="{{ url_for('workspace_link', wid=w.id, uid=u.id) }}" class="inline">
@@ -53,20 +53,21 @@
     <form method="post" action="{{ url_for('workspace_remove', wid=w.id, uid=u.id) }}" class="inline">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="link danger">Remove</button>
-    </form>{% endif %}</td>
+    </form>{% endif %}</td>{% endif %}
 </tr>
 {% endfor %}
 </tbody>
 </table>
 </div>
-<form method="post" action="{{ url_for('workspace_invite', wid=w.id) }}" class="row">
+{% if host %}<p class="small">The members are the people of {{ host.home_name or 'the program around lanes' }}.</p>
+{% else %}<form method="post" action="{{ url_for('workspace_invite', wid=w.id) }}" class="row">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <input name="name" placeholder="Name" required>
   <input name="email" type="email" placeholder="Email" required>
   <button>Add a member</button>
 </form>
 <p class="small">A new member gets an invite link. Send it yourself; it works once, for 7 days.
-A chief or an admin can remove a member; their cards and comments keep their name.</p>
+A chief or an admin can remove a member; their cards and comments keep their name.</p>{% endif %}
 
 <h2>Import from Taiga</h2>
 <p class="small">In Taiga, open the project, then Admin, Project and Export. Upload the file here

@@ -106,6 +106,26 @@ They go in `.env` next to `app.py`.
 | `LANES_HOST` | Address to listen on, 127.0.0.1 by default |
 | `LANES_DATA` | Folder for the database, `data/` by default |
 
+## Inside another program
+
+A Python program that already has its own login can show lanes under an address of its own,
+such as `/board`. It loads `app.py`, and for each request of a person who is logged in it sets
+`SCRIPT_NAME`, and puts the person in the WSGI environ before it calls `app.wsgi_app`:
+
+```python
+environ["lanes.user"] = {
+    "mail": "ada@example.com", "name": "Ada Lovelace",
+    "chief": True,            # may tidy the workspace
+    "workspace": "Team",      # the name of the one workspace, made at the first visit
+    "home": "/", "home_name": "Intranet",  # the link back, where lanes has "Log out"
+}
+```
+
+lanes then asks for no password and makes no invite links. Everyone who comes this way is a
+member of the one workspace. A browser cannot set that key, since what it sends arrives as
+`HTTP_...`. Give lanes a session cookie of its own (`SESSION_COOKIE_NAME`, `SESSION_COOKIE_PATH`),
+or it overwrites the cookie of the program around it.
+
 ## Container
 
 The `Dockerfile` runs lanes as user 10000 on port 8080, with the database in `/data`:

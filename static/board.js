@@ -59,7 +59,7 @@ function quietSave(form) {
   saving = saving.then(async () => {
     try {
       const answer = await fetch(form.action, { method: "POST", body });
-      if (!answer.ok || new URL(answer.url).pathname === "/login") throw new Error(answer.status);
+      if (!answer.ok || new URL(answer.url).pathname.endsWith("/login")) throw new Error(answer.status);
       const page = new DOMParser().parseFromString(await answer.text(), "text/html");
       const fresh = page.getElementById("board");
       const [left, top] = [board.scrollLeft, board.scrollTop];
@@ -314,7 +314,7 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible") return;
   try {
-    const res = await fetch(`/b/${bid}/version`, { credentials: "same-origin" });
+    const res = await fetch(board.dataset.check, { credentials: "same-origin" });
     if (res.ok && (await res.text()).trim() !== board.dataset.version) {
       saveScroll();
       location.reload();

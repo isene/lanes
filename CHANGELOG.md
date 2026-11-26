@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.0 (2026-11-26)
+
+- Another program can have lanes inside it, under an address such as `/board`. That program
+  owns the login: it hands lanes the person who is logged in, and lanes asks for no password.
+  The person joins the one workspace such a lanes has. The README says how.
+- Every link, form and background save works under such an address.
+
 ## 0.10.0 (2026-11-26)
 
 - A workspace has chiefs. A chief removes members and makes other members chiefs; before,

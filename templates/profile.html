@@ -36,7 +36,7 @@
   </form>
 </section>
 
-<section class="panel">
+{% if not host %}<section class="panel">
   <h3>Password</h3>
   <form method="post">
     <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -48,7 +48,7 @@
       <input type="password" name="new_password2" autocomplete="new-password" minlength="12" required></label>
     <button>Change the password</button>
   </form>
-</section>
+</section>{% endif %}
 </div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='forms.js') }}"></script>{% endblock %}

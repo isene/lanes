@@ -18,16 +18,17 @@
   {% if me %}
   <nav>
     <form method="post" action="{{ url_for('profile') }}" class="mode">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ here }}">
       <button name="theme" value="dark" class="link to-dark" title="Dark colours">☾</button>
       <button name="theme" value="light" class="link to-light" title="Light colours">☀</button>
     </form>
     {% if me.is_admin %}<a href="{{ url_for('admin') }}">Users</a>{% endif %}
     <a class="me" href="{{ url_for('profile') }}" title="Your profile">{{ avatar(me.id, me.name, me.pic, 'sm') }}<span class="wide">{{ me.name }}</span></a>
-    <form method="post" action="{{ url_for('logout') }}" class="inline">
+    {% if host %}<a href="{{ host.home or '/' }}">{{ host.home_name or 'Back' }}</a>
+    {% else %}<form method="post" action="{{ url_for('logout') }}" class="inline">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="link">Log out</button>
-    </form>
+    </form>{% endif %}
   </nav>
   {% endif %}
 </header>

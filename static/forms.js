@@ -26,7 +26,7 @@ async function shrink(file, how) {
 async function quietSave(form) {
   try {
     const answer = await fetch(form.action, { method: "POST", body: new FormData(form) });
-    if (!answer.ok || new URL(answer.url).pathname === "/login") throw new Error(answer.status);
+    if (!answer.ok || new URL(answer.url).pathname.endsWith("/login")) throw new Error(answer.status);
     const page = new DOMParser().parseFromString(await answer.text(), "text/html");
     const theme = page.documentElement.dataset.theme;
     if (theme) document.documentElement.dataset.theme = theme;
