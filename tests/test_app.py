@@ -681,6 +681,19 @@ def test_a_program_around_lanes_hands_over_the_login_and_the_address(monkeypatch
         "/", headers={"Lanes-User": "ada@host.example", "lanes.user": "ada@host.example"}
     )
     assert r.headers["Location"].endswith("/login")
+    # with no admin in a mounted lanes, the chief links the workspace to a town; a member cannot
+    form = {
+        "town_name": "Town hall",
+        "town_url": "https://town.example",
+        "town_key": "k",
+        "new_key": "1",
+    }
+    with b.session_transaction(base_url="http://localhost/board") as s:
+        bens = s["csrf"]
+    assert b.post(**at(f"/admin/w/{wid}/town"), data={"csrf": bens, **form}).status_code == 403
+    r = a.post(**at(f"/admin/w/{wid}/town"), data={"csrf": token, **form})
+    assert r.headers["Location"] == f"/board/w/{wid}"
+    assert f"/board/api/town/{wid} " in a.get(**at(f"/w/{wid}")).data.decode()
     # a chief the program no longer names loses the role at the next visit
     visitor(dict(ada, chief=False)).get(**at("/"))
     assert (

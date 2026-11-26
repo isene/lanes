@@ -69,6 +69,19 @@
 <p class="small">A new member gets an invite link. Send it yourself; it works once, for 7 days.
 A chief or an admin can remove a member; their cards and comments keep their name.</p>{% endif %}
 
+{% if host and lead %}
+<h2>{{ w.town_name or 'Link to a town' }}</h2>
+<form method="post" action="{{ url_for('workspace_town', wid=w.id) }}" class="row">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input name="town_name" value="{{ w.town_name }}" placeholder="The town's name, shown on the button">
+  <input name="town_url" value="{{ w.town_url }}" placeholder="https://town.example">
+  <input name="town_key" type="password" autocomplete="off" placeholder="{{ 'Empty keeps the town\'s key' if w.town_url else 'The key the town gave' }}">
+  <button>Save</button>
+  <button name="new_key" value="1">{{ 'Save and make a new key for the town' if w.key_hash else 'Save and make a key for the town' }}</button>
+</form>
+<p class="small">Cards the team sends go to the town as tickets, and the town's news and tasks come back.</p>
+{% endif %}
+
 <h2>Import from Taiga</h2>
 <p class="small">In Taiga, open the project, then Admin, Project and Export. Upload the file here
 to make a board from it. Its people join this workspace.</p>

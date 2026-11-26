@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.1 (2026-11-26)
+
+- Inside another program lanes has no admin, so a chief links the workspace to a town, on the
+  workspace's page.
+
 ## 0.12.0 (2026-11-26)
 
 - A workspace can be linked to a town: another program, such as a company's help desk. A card

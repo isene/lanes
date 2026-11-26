@@ -37,7 +37,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.12.0"
+__version__ = "0.12.1"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -1692,15 +1692,20 @@ def town_api(wid):
 
 @app.route("/admin/w/<int:wid>/town", methods=["POST"])
 def workspace_town(wid):
-    """The admin links a workspace to a town: its name, its address and the key it gave."""
-    admin_only()
+    """The admin links a workspace to a town: its name, its address and the key it gave. Inside
+    another program lanes has no admin, so a chief of the workspace does it, on the workspace's page.
+    """
+    mounted = bool(request.environ.get("lanes.user"))
+    if not (current_user()["is_admin"] or (mounted and leads(wid))):
+        abort(403)
+    back = url_for("workspace", wid=wid) if mounted else url_for("admin")
     f, con = request.form, db()
     if not con.execute("SELECT 1 FROM workspaces WHERE id = ?", (wid,)).fetchone():
         abort(404)
     url = f.get("town_url", "").strip()
     if url and not web(url):
         flash("The town's address starts with https://")
-        return redirect(url_for("admin"))
+        return redirect(back)
     con.execute(
         "UPDATE workspaces SET town_name = ?, town_url = ? WHERE id = ?",
         (f.get("town_name", "").strip(), url, wid),
@@ -1713,7 +1718,7 @@ def workspace_town(wid):
         address = url_for("town_api", wid=wid, _external=True)
         flash(f"Give the town this address and key. The key shows only now: {address} {key}")
     con.commit()
-    return redirect(url_for("admin"))
+    return redirect(back)
 
 
 # Import from Taiga: Admin, Project, Export gives a JSON file
