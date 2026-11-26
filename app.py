@@ -37,7 +37,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.12.1"
+__version__ = "0.13.0"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -2101,6 +2101,51 @@ def start_overdue_poster() -> None:
     threading.Thread(target=run, daemon=True).start()
 
 
+def export(con: sqlite3.Connection, wid: int, path: str) -> str:
+    """Write one workspace, with its boards, cards, files and people, to a new lanes database.
+    A fresh lanes runs that file as its data/lanes.db. Logins, keys and the town stay behind;
+    the chiefs are the new copy's admins."""
+    if os.path.exists(path):
+        return f"{path} is there already."
+    if not con.execute("SELECT 1 FROM workspaces WHERE id = ?", (wid,)).fetchone():
+        return "No such workspace."
+    con.execute("ATTACH DATABASE ? AS out", (path,))
+    tables = "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'"
+    for (sql,) in con.execute(tables).fetchall():  # the same tables and columns as this database
+        con.execute(re.sub(r"^CREATE (TABLE|INDEX) (IF NOT EXISTS )?", r"CREATE \1 out.", sql))
+    boards = "SELECT id FROM boards WHERE workspace_id = :w"
+    cards = f"SELECT id FROM cards WHERE board_id IN ({boards})"
+    people = (  # members, and the people who left but wrote a card, a comment or a file
+        f"SELECT user_id FROM members WHERE workspace_id = :w UNION SELECT created_by FROM cards"
+        f" WHERE id IN ({cards}) UNION SELECT user_id FROM comments WHERE card_id IN ({cards})"
+        f" UNION SELECT user_id FROM attachments WHERE card_id IN ({cards})"
+    )
+    for table, where in (
+        ("workspaces", "id = :w"),
+        ("logos", "workspace_id = :w"),
+        ("users", f"id IN ({people})"),
+        ("pictures", f"user_id IN ({people})"),
+        ("members", "workspace_id = :w"),
+        ("boards", "workspace_id = :w"),
+        *((t, f"board_id IN ({boards})") for t in ("columns", "lanes", "labels", "cards")),
+        *((t, f"card_id IN ({cards})") for t in ("card_people", "card_labels", "subtasks")),
+        *((t, f"card_id IN ({cards})") for t in ("comments", "attachments", "town_notes")),
+    ):
+        con.execute(f"INSERT INTO out.{table} SELECT * FROM main.{table} WHERE {where}", {"w": wid})
+    con.execute(
+        "UPDATE out.users SET pw_hash = NULL, totp_secret = NULL, invite_token = NULL,"
+        " invite_expires = NULL, is_admin = id IN (SELECT user_id FROM out.members WHERE chief)"
+    )
+    con.execute(
+        "UPDATE out.workspaces SET moved_to = '', town_name = '', town_url = '', town_key = '',"
+        " key_hash = ''"
+    )
+    con.commit()
+    con.execute("DETACH DATABASE out")
+    n = con.execute(f"SELECT COUNT(*) FROM cards WHERE id IN ({cards})", {"w": wid}).fetchone()[0]
+    return f"Wrote {path} with {n} cards. On the new server it is data/lanes.db; then run invite EMAIL."
+
+
 def main(args: list) -> None:
     init_db()
     if args[:1] == ["adduser"] and len(args) >= 3:
@@ -2115,6 +2160,9 @@ def main(args: list) -> None:
     elif args[:1] == ["overdue"] and len(args) == 2:
         with closing(connect()) as con:
             print(overdue(con, int(args[1])))
+    elif args[:1] == ["export"] and len(args) == 3:
+        with closing(connect()) as con:
+            print(export(con, int(args[1]), args[2]))
     elif args[:1] == ["move"] and len(args) == 3:
         with closing(connect()) as con:
             con.execute(
@@ -2131,7 +2179,7 @@ def main(args: list) -> None:
     else:
         print(
             "usage: app.py [adduser EMAIL NAME [--admin] | invite EMAIL | overdue WORKSPACE-ID"
-            " | move WORKSPACE-ID URL]"
+            " | export WORKSPACE-ID FILE | move WORKSPACE-ID URL]"
         )
 
 

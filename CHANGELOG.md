@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.0 (2026-11-26)
+
+- `app.py export WORKSPACE-ID FILE` writes one workspace to a new database that a fresh lanes
+  runs as it is. Passwords, phone codes and the link to a town stay behind, and the chiefs are
+  the new copy's admins.
+
 ## 0.12.1 (2026-11-26)
 
 - Inside another program lanes has no admin, so a chief links the workspace to a town, on the

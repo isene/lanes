@@ -53,6 +53,9 @@ Enough to move one team off Taiga.
 - With `LANES_WEBHOOK_URL` and `LANES_WEBHOOK_SECRET` set, lanes posts that list to a chat
   webhook at 09:00 on weekdays (local time; set `TZ`). `LANES_WEBHOOK_HOUR` moves the hour and
   `LANES_WEBHOOK_WORKSPACE` picks the workspace (default 1). A day with no late cards posts nothing.
+- `app.py export WORKSPACE-ID FILE` writes one workspace, with its boards, cards, files and
+  people, to a new database. A fresh lanes runs it as `data/lanes.db`. Logins stay behind:
+  `app.py invite EMAIL` gives each person a new link, and the chiefs are the admins there.
 - `app.py move WORKSPACE-ID URL` marks a workspace as moved to another lanes server. Its
   people get a page with the new link and can no longer log in here. An empty URL undoes it.
 - A profile page for name, picture, password, and light or dark colours.

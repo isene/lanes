@@ -482,6 +482,31 @@ def test_a_card_goes_up_to_the_town_and_news_and_tasks_come_back(monkeypatch):
     assert [r[0] for r in q("SELECT board_id FROM cards WHERE town_ref = 'INC-9'")] == [bid]
 
 
+def test_export_writes_one_workspace_without_logins_to_a_new_database():
+    ada, _ = user("ada@example.com", "Ada", admin=True)
+    wid, bid = workspace_with_board(ada, "Leaving team")
+    workspace_with_board(ada, "Staying team")
+    todo = q("SELECT id FROM columns WHERE board_id = ? ORDER BY pos", bid)[0][0]
+    post(ada, f"/b/{bid}/cards/new", title="Hand over the keys", column=todo)
+    cid = q("SELECT max(id) FROM cards")[0][0]
+    post(ada, f"/card/{cid}/comment", body="Done by Friday")
+    post(
+        ada, f"/admin/w/{wid}/town", town_name="Desk", town_url="https://town.example", town_key="k"
+    )
+    path = str(TMP / "leaving.db")
+    with lanes.connect() as con:
+        assert lanes.export(con, wid, path).startswith("Wrote")
+        assert "there already" in lanes.export(con, wid, path)
+    out = lanes.sqlite3.connect(path)
+    assert [r[0] for r in out.execute("SELECT name FROM workspaces")] == ["Leaving team"]
+    assert [r[0] for r in out.execute("SELECT title FROM cards")] == ["Hand over the keys"]
+    assert [r[0] for r in out.execute("SELECT body FROM comments")] == ["Done by Friday"]
+    assert out.execute("SELECT pw_hash, totp_secret, is_admin FROM users").fetchall() == [
+        (None, None, 1)  # Ada made the workspace, so she is its chief and the new admin
+    ]
+    assert out.execute("SELECT town_url, town_key FROM workspaces").fetchall() == [("", "")]
+
+
 def test_a_card_past_its_date_shows_red_and_is_listed_by_person():
     uma, uma_id = user("uma@example.com", "Uma Ink", admin=True)
     wid, bid = workspace_with_board(uma)
