@@ -271,7 +271,7 @@
   <details class="edit">
     <summary>Send to {{ town }}</summary>
     <p class="small">The title and the text go to {{ town }}. Comments below stay in the team.</p>
-    <form method="post" action="{{ url_for('to_town', cid=c.id) }}">{{ hidden() }}<button>Send</button></form>
+    <form method="post" action="{{ url_for('to_town', cid=c.id) }}">{{ hidden() }}{% for k in town_kinds(w) %}<button name="kind" value="{{ k }}">As {{ k }}</button> {% else %}<button>Send</button>{% endfor %}</form>
   </details>
   {% endif %}{% endif %}
 

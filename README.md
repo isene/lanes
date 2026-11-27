@@ -145,6 +145,8 @@ address and key the town calls back with.
   the key lanes gave. The card shows the ticket's state and the town's comments.
 - Down: the town posts `{ref, title, body, url}` to the same address. lanes makes a
   card in the first column of the workspace's first board, once per ref.
+- Kinds: the town may take a card as one of several kinds, such as `RfC, Deviation`. The card
+  then has one button per kind, and the post to `/api/tickets` carries `kind`.
 - Links: the town may offer links on each card, one `Label | address` per line, where
   `{id}` and `{title}` are filled in, such as `Add a risk | https://town.example/risks?card={id}`.
   The town may then write about that card before it is sent, with the ref `card-<id>`.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.16.0 (2026-11-27)
+
+- A town may take a card as one of several kinds, such as an RfC or a deviation. The admin types them
+  with the town's name and address, and a card then has one button per kind.
+
 ## 0.15.0 (2026-11-27)
 
 - A town may offer links on each card, such as a form for a risk, with the card's number and title

@@ -502,6 +502,14 @@ def test_a_card_goes_up_to_the_town_and_news_and_tasks_come_back(monkeypatch):
     assert "Risk R-9 added" in page and "<button>Send</button>" in page  # it is still to be sent
     other_auth = {"Authorization": f"Bearer {other_key}"}
     assert client.post(f"/api/town/{other}", json=note, headers=other_auth).status_code == 404
+    # The town takes a card as one of its kinds; the kind goes up with it, and no other is taken
+    post(ada, f"/admin/w/{wid}/town", **town_form, town_kinds=" RfC,, Deviation ")
+    page = ada.get(f"/b/{bid}?card={new}").data.decode()
+    assert 'value="RfC, Deviation"' in page or "RfC, Deviation" in ada.get("/admin").data.decode()
+    assert 'value="Deviation">As Deviation</button>' in page and "<button>Send</button>" not in page
+    assert post(ada, f"/card/{new}/town", kind="Party").status_code == 400
+    post(ada, f"/card/{new}/town", kind="Deviation")
+    assert sent[-1][2]["kind"] == "Deviation" and sent[-1][2]["ref"] == f"card-{new}"
 
 
 def test_export_writes_one_workspace_without_logins_to_a_new_database():

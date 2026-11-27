@@ -13,6 +13,7 @@
     <input name="town_url" value="{{ w.town_url }}" placeholder="https://town.example">
     <input name="town_key" type="password" autocomplete="off" placeholder="{{ 'Empty keeps the town\'s key' if w.town_url else 'The key the town gave' }}">
     <textarea name="town_links" rows="2" placeholder="Links on each card, one per line: Add a risk | https://town.example/risks?card={id}&amp;title={title}">{{ w.town_links }}</textarea>
+    <input name="town_kinds" value="{{ w.town_kinds }}" placeholder="What a card may become there, with commas: RfC, Deviation">
     <button>Save</button>
     <button name="new_key" value="1">{{ 'Save and make a new key for the town' if w.has_key else 'Save and make a key for the town' }}</button>
   </form>
