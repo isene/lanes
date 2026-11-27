@@ -482,6 +482,26 @@ def test_a_card_goes_up_to_the_town_and_news_and_tasks_come_back(monkeypatch):
     assert client.post(f"/api/town/{wid}", json=task, headers=auth).status_code == 201
     assert client.post(f"/api/town/{wid}", json=task, headers=auth).status_code == 200
     assert [r[0] for r in q("SELECT board_id FROM cards WHERE town_ref = 'INC-9'")] == [bid]
+    # The town's links on each card, and news on a card that was never sent
+    links = (
+        "Add a risk | https://town.example/risks?card={id}&title={title}\nBad | javascript:alert(1)"
+    )
+    post(ada, f"/admin/w/{wid}/town", **town_form, town_links=links)
+    post(ada, f"/b/{bid}/cards/new", title="Old & tired switch", column=todo)
+    new = q("SELECT max(id) FROM cards")[0][0]
+    page = ada.get(f"/b/{bid}?card={new}").data.decode()
+    assert f"https://town.example/risks?card={new}&amp;title=Old%20%26%20tired%20switch" in page
+    assert "javascript:" not in page
+    note = {
+        "event": "note",
+        "ticket": {"ref": f"card-{new}"},
+        "changes": [{"field": "comment", "new": "Risk R-9 added", "who": "Sam"}],
+    }
+    assert client.post(f"/api/town/{wid}", json=note, headers=auth).status_code == 200
+    page = ada.get(f"/b/{bid}?card={new}").data.decode()
+    assert "Risk R-9 added" in page and "<button>Send</button>" in page  # it is still to be sent
+    other_auth = {"Authorization": f"Bearer {other_key}"}
+    assert client.post(f"/api/town/{other}", json=note, headers=other_auth).status_code == 404
 
 
 def test_export_writes_one_workspace_without_logins_to_a_new_database():

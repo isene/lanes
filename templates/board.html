@@ -255,11 +255,14 @@
 
   {% if w.town_url %}{% set town = w.town_name or 'the town' %}
   <h3>{{ w.town_name or 'The town' }}</h3>
+  {% set links = town_links(w, c) %}{% if links %}<p>{% for label, url in links %}<a href="{{ url }}" target="_blank" rel="noopener noreferrer">{{ label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}
   {% if c.town_ref %}
   <p>{% if c.town_state %}{{ c.town_state }}{% else %}Sent{% endif %}{% if c.town_url %} · <a href="{{ c.town_url }}" rel="noopener noreferrer">Open it there</a>{% endif %}</p>
+  {% endif %}
   {% for n in oc.town_notes %}
   <div class="comment"><div class="bubble"><div class="small"><b>{{ n.who }}</b> · {{ n.created_at|when }}</div>{{ n.body|md }}</div></div>
   {% endfor %}
+  {% if c.town_ref %}
   <form method="post" action="{{ url_for('to_town', cid=c.id) }}">
     {{ hidden() }}<textarea name="comment" rows="2" placeholder="Write to {{ town }}" required></textarea>
     <button>Send to {{ town }}</button>

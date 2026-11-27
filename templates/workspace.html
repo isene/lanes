@@ -76,6 +76,7 @@ A chief or an admin can remove a member; their cards and comments keep their nam
   <input name="town_name" value="{{ w.town_name }}" placeholder="The town's name, shown on the button">
   <input name="town_url" value="{{ w.town_url }}" placeholder="https://town.example">
   <input name="town_key" type="password" autocomplete="off" placeholder="{{ 'Empty keeps the town\'s key' if w.town_url else 'The key the town gave' }}">
+  <textarea name="town_links" rows="2" placeholder="Links on each card, one per line: Add a risk | https://town.example/risks?card={id}&amp;title={title}">{{ w.town_links }}</textarea>
   <button>Save</button>
   <button name="new_key" value="1">{{ 'Save and make a new key for the town' if w.key_hash else 'Save and make a key for the town' }}</button>
 </form>

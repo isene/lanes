@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.0 (2026-11-27)
+
+- A town may offer links on each card, such as a form for a risk, with the card's number and title
+  filled in. They are set with the town's name and address.
+- The town's notes show on a card before it is sent, so a risk added through such a link shows there.
+
 ## 0.14.1 (2026-11-26)
 
 - Fixed: a workspace's colour never showed, and left the top bar with no background, so its white

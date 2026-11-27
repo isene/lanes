@@ -37,7 +37,7 @@ from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-__version__ = "0.14.1"
+__version__ = "0.15.0"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -200,6 +200,7 @@ def init_db() -> None:
             ("cards", "town_ref", "TEXT"),  # the card's name at the town
             ("cards", "town_url", "TEXT"),
             ("cards", "town_state", "TEXT"),
+            ("workspaces", "town_links", "TEXT NOT NULL DEFAULT ''"),  # links on each card
         ):
             if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
@@ -1588,6 +1589,30 @@ def town_card(con: sqlite3.Connection, wid: int, ref: str) -> sqlite3.Row | None
     return con.execute(sql, (wid, ref)).fetchone() if ref else None
 
 
+def unsent_card(con: sqlite3.Connection, wid: int, ref: str) -> sqlite3.Row | None:
+    """A card the town writes about before it was sent, named card-<id>, such as one that got a risk through a town link."""
+    m = re.fullmatch(r"card-(\d{1,9})", ref)
+    sql = (
+        "SELECT c.* FROM cards c JOIN boards b ON b.id = c.board_id"
+        " WHERE b.workspace_id = ? AND c.id = ? AND c.town_ref IS NULL"
+    )
+    return con.execute(sql, (wid, int(m[1]))).fetchone() if m else None
+
+
+@app.template_global()
+def town_links(w: sqlite3.Row, c: sqlite3.Row) -> list[tuple[str, str]]:
+    """The town's links on a card: one "Label | address" per line, with {id} and {title} filled in."""
+    out = []
+    for line in (w["town_links"] or "").splitlines():
+        label, _, url = line.partition("|")
+        url = (
+            url.strip().replace("{id}", str(c["id"])).replace("{title}", quote(c["title"], safe=""))
+        )
+        if label.strip() and web(url):
+            out.append((label.strip(), url))
+    return out
+
+
 @app.route("/card/<int:cid>/town", methods=["POST"])
 def to_town(cid):
     """Send a card up to the town, or write to the town about a card that is there."""
@@ -1638,7 +1663,8 @@ def town_api(wid):
         abort(400)
     if "event" in data:
         t = data.get("ticket") if isinstance(data.get("ticket"), dict) else {}
-        c = town_card(con, wid, str(t.get("ref") or ""))
+        ref = str(t.get("ref") or "")
+        c = town_card(con, wid, ref) or unsent_card(con, wid, ref)
         if c is None:
             abort(404)
         con.execute(
@@ -1721,9 +1747,10 @@ def workspace_town(wid):
     if url and not web(url):
         flash("The town's address starts with https://")
         return redirect(back)
+    links = "\n".join(x.strip() for x in f.get("town_links", "").splitlines() if x.strip())[:2000]
     con.execute(
-        "UPDATE workspaces SET town_name = ?, town_url = ? WHERE id = ?",
-        (f.get("town_name", "").strip(), url, wid),
+        "UPDATE workspaces SET town_name = ?, town_url = ?, town_links = ? WHERE id = ?",
+        (f.get("town_name", "").strip(), url, links, wid),
     )
     if f.get("town_key", "").strip():
         con.execute("UPDATE workspaces SET town_key = ? WHERE id = ?", (f["town_key"].strip(), wid))
@@ -2037,7 +2064,7 @@ def admin():
     spaces = (
         db()
         .execute(
-            "SELECT w.id, w.name, w.town_name, w.town_url, w.key_hash != '' AS has_key,"
+            "SELECT w.id, w.name, w.town_name, w.town_url, w.town_links, w.key_hash != '' AS has_key,"
             " (SELECT COUNT(*) FROM members m WHERE m.workspace_id = w.id) AS size,"
             " (SELECT group_concat(u.name, ', ') FROM members m JOIN users u ON u.id = m.user_id"
             " WHERE m.workspace_id = w.id AND m.chief) AS chiefs FROM workspaces w ORDER BY w.name"
